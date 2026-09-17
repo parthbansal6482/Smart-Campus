@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  FACULTY
+  STAFF
+  ADMIN
+  RESPONDER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum EmergencyStatus {
+  REPORTED
+  DISPATCHED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum OrderType {
+  PICKUP
+  DINE_IN
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum MenuCategory {
+  BREAKFAST
+  LUNCH
+  SNACKS
+  BEVERAGES
+  SPECIAL
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  role         Role          @default(STUDENT)
+  phone        String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  bookings     Booking[]
+  emergencies  Emergency[]
+  orders       Order[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Building {
+  id          String      @id @default(uuid())
+  name        String
+  code        String      @unique
+  latitude    Float
+  longitude   Float
+  floorCount  Int         @default(1) @map("floor_count")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  rooms       Room[]
+  emergencies Emergency[]
+
+  @@map("buildings")
+}
+
+model Room {
+  id           String      @id @default(uuid())
+  buildingId   String      @map("building_id")
+  roomNumber   String      @map("room_number")
+  floor        Int         @default(1)
+  capacity     Int         @default(30)
+  hasAC        Boolean     @default(true) @map("has_ac")
+  hasProjector Boolean     @default(true) @map("has_projector")
+  isOccupied   Boolean     @default(false) @map("is_occupied")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  building     Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+
+  @@unique([buildingId, roomNumber])
+  @@index([buildingId])
+  @@index([isOccupied])
+  @@map("rooms")
+}
+
+model Booking {
+  id        String        @id @default(uuid())
+  roomId    String        @map("room_id")
+  userId    String        @map("user_id")
+  startTime DateTime      @map("start_time")
+  endTime   DateTime      @map("end_time")
+  purpose   String?
+  status    BookingStatus @default(CONFIRMED)
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  room      Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, startTime, endTime])
+  @@index([userId])
+  @@index([status])
+  @@map("bookings")
+}
+
+model Emergency {
+  id          String          @id @default(uuid())
+  userId      String          @map("user_id")
+  latitude    Float
+  longitude   Float
+  buildingId  String?         @map("building_id")
+  description String?
+  status      EmergencyStatus @default(REPORTED)
+  reportedAt  DateTime        @default(now()) @map("reported_at")
+  resolvedAt  DateTime?       @map("resolved_at")
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  building    Building?       @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([reportedAt])
+  @@map("emergencies")
+}
+
+model MenuItem {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  category    MenuCategory @default(SNACKS)
+  isAvailable Boolean      @default(true) @map("is_available")
+  imageUrl    String?      @map("image_url")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  orderItems  OrderItem[]
+
+  @@index([category])
+  @@index([isAvailable])
+  @@map("menu_items")
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String      @map("user_id")
+  orderType   OrderType   @default(PICKUP) @map("order_type")
+  status      OrderStatus @default(PENDING)
+  pickupTime  DateTime?   @map("pickup_time")
+  totalAmount Float       @map("total_amount")
+  note        String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String   @map("order_id")
+  menuItemId String   @map("menu_item_id")
+  quantity   Int      @default(1)
+  unitPrice  Float    @map("unit_price")
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_items")
+}
