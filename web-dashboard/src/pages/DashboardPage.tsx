@@ -46,7 +46,7 @@ export const DashboardPage: React.FC = () => {
 
   const occupiedRoomsCount = rooms.filter(r => r.isOccupied).length;
   const activeEmergenciesCount = emergencies.length;
-  const pendingOrdersCount = orders.filter(o => o.status === 'PENDING' || o.status === 'PREPARING').length;
+  const pendingOrdersCount = orders.filter(o => o.status === 'PLACED' || o.status === 'PREPARING').length;
 
   return (
     <div className="space-y-8">

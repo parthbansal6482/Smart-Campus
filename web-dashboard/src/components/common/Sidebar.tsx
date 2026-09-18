@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   GraduationCap,
-  AlertTriangle,
+  HeartPulse,
   UtensilsCrossed,
   Users,
   Settings,
@@ -11,17 +11,51 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { Role } from '../../types';
 
 export const Sidebar: React.FC = () => {
   const { user, logout } = useAuthStore();
 
+  const userRole: Role = user?.role || 'ADMIN';
+
   const navItems = [
-    { label: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { label: 'Classrooms', path: '/classrooms', icon: GraduationCap },
-    { label: 'Emergencies', path: '/emergencies', icon: AlertTriangle, badge: 'Live' },
-    { label: 'Cafeteria', path: '/cafeteria', icon: UtensilsCrossed },
-    { label: 'Users & Roles', path: '/users', icon: Users, adminOnly: true },
-    { label: 'Settings', path: '/settings', icon: Settings },
+    {
+      label: 'Campus Overview',
+      path: '/',
+      icon: LayoutDashboard,
+      roles: ['ADMIN'],
+    },
+    {
+      label: 'Classroom Hub',
+      path: '/classroom',
+      icon: GraduationCap,
+      roles: ['ADMIN', 'FACULTY'],
+    },
+    {
+      label: 'Medical Help',
+      path: '/medical-help',
+      icon: HeartPulse,
+      badge: 'Dispatches',
+      roles: ['ADMIN', 'MEDICAL_STAFF', 'AMBULANCE_RESPONDER'],
+    },
+    {
+      label: 'Cafeteria Orders',
+      path: '/cafeteria',
+      icon: UtensilsCrossed,
+      roles: ['ADMIN', 'CAFETERIA_STAFF'],
+    },
+    {
+      label: 'Users & Roles',
+      path: '/users',
+      icon: Users,
+      roles: ['ADMIN'],
+    },
+    {
+      label: 'Settings',
+      path: '/settings',
+      icon: Settings,
+      roles: ['ADMIN', 'CAFETERIA_STAFF', 'MEDICAL_STAFF', 'AMBULANCE_RESPONDER', 'FACULTY'],
+    },
   ];
 
   return (
@@ -33,14 +67,24 @@ export const Sidebar: React.FC = () => {
         </div>
         <div>
           <h1 className="text-sm font-bold text-slate-900 leading-tight">Smart Campus</h1>
-          <p className="text-[11px] font-medium text-slate-400">Admin & Operations</p>
+          <p className="text-[11px] font-medium text-slate-400">Unified Portal</p>
+        </div>
+      </div>
+
+      {/* Role Badge Indicator */}
+      <div className="px-4 pt-3 pb-1">
+        <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-between">
+          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Scope</span>
+          <span className="text-[11px] font-bold text-campus-700 uppercase bg-campus-50 px-2 py-0.5 rounded border border-campus-200/60">
+            {userRole.replace('_', ' ')}
+          </span>
         </div>
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
         {navItems.map(item => {
-          if (item.adminOnly && user?.role !== 'ADMIN') return null;
+          if (!item.roles.includes(userRole)) return null;
 
           const Icon = item.icon;
           return (
@@ -51,7 +95,7 @@ export const Sidebar: React.FC = () => {
               className={({ isActive }) =>
                 `flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-campus-50 text-campus-700 font-semibold shadow-xs'
+                    ? 'bg-campus-50 text-campus-700 font-semibold shadow-xs border border-campus-100'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`
               }
@@ -74,12 +118,12 @@ export const Sidebar: React.FC = () => {
       <div className="p-3 border-t border-slate-100">
         <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700 shrink-0">
+            <div className="w-8 h-8 rounded-full bg-campus-100 text-campus-700 flex items-center justify-center text-xs font-bold shrink-0">
               {user?.name?.charAt(0) || 'U'}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-slate-800 truncate">{user?.name || 'Campus Staff'}</p>
-              <p className="text-[11px] text-slate-400 truncate capitalize">{user?.role?.toLowerCase() || 'Admin'}</p>
+              <p className="text-xs font-semibold text-slate-800 truncate">{user?.name || 'Staff User'}</p>
+              <p className="text-[11px] text-slate-400 truncate capitalize">{userRole.toLowerCase().replace('_', ' ')}</p>
             </div>
           </div>
           <button

@@ -1,4 +1,17 @@
-import { PrismaClient, Role, MenuCategory, OrderType, OrderStatus, BookingStatus, EmergencyStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  MenuCategory,
+  OrderType,
+  OrderStatus,
+  BookingStatus,
+  EmergencyStatus,
+  EmergencyTag,
+  MedicineCategory,
+  MedicineOrderStatus,
+  ConsultationType,
+  ConsultationStatus,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -6,11 +19,18 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed...');
 
-  // 1. Clean existing records (in reverse relation order)
+  // 1. Clean existing records in reverse relation order
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.menuItem.deleteMany();
+  await prisma.offer.deleteMany();
+
+  await prisma.medicineOrderItem.deleteMany();
+  await prisma.medicineOrder.deleteMany();
+  await prisma.medicine.deleteMany();
+  await prisma.consultation.deleteMany();
   await prisma.emergency.deleteMany();
+
   await prisma.booking.deleteMany();
   await prisma.room.deleteMany();
   await prisma.building.deleteMany();
@@ -21,7 +41,7 @@ async function main() {
   // 2. Hash default password
   const passwordHash = await bcrypt.hash('Password@123', 10);
 
-  // 3. Create Users
+  // 3. Create Users for all roles
   const adminUser = await prisma.user.create({
     data: {
       name: 'System Administrator',
@@ -52,30 +72,40 @@ async function main() {
     },
   });
 
-  const staffUser = await prisma.user.create({
+  const cafeteriaStaff = await prisma.user.create({
     data: {
       name: 'Chef Gordon',
-      email: 'staff@smartcampus.edu',
+      email: 'cafeteria@smartcampus.edu',
       passwordHash,
-      role: Role.STAFF,
+      role: Role.CAFETERIA_STAFF,
       phone: '+1-555-0104',
+    },
+  });
+
+  const medicalStaff = await prisma.user.create({
+    data: {
+      name: 'Dr. House (Medical Center)',
+      email: 'medical@smartcampus.edu',
+      passwordHash,
+      role: Role.MEDICAL_STAFF,
+      phone: '+1-555-0105',
     },
   });
 
   const responderUser = await prisma.user.create({
     data: {
-      name: 'Campus EMT Team',
+      name: 'Ambulance Unit 1',
       email: 'responder@smartcampus.edu',
       passwordHash,
-      role: Role.RESPONDER,
-      phone: '+1-555-0105',
+      role: Role.AMBULANCE_RESPONDER,
+      phone: '+1-555-0106',
     },
   });
 
-  console.log('👥 Created seed users for all roles.');
+  console.log('👥 Created seed users across all roles.');
 
-  // 4. Create Buildings
-  const engineeringBuilding = await prisma.building.create({
+  // 4. Create Buildings & Rooms (Classroom Module)
+  const engBuilding = await prisma.building.create({
     data: {
       name: 'Alan Turing Engineering Hall',
       code: 'ENG',
@@ -85,7 +115,7 @@ async function main() {
     },
   });
 
-  const scienceBuilding = await prisma.building.create({
+  const sciBuilding = await prisma.building.create({
     data: {
       name: 'Marie Curie Science Complex',
       code: 'SCI',
@@ -95,22 +125,9 @@ async function main() {
     },
   });
 
-  const studentCenter = await prisma.building.create({
-    data: {
-      name: 'Student Hub & Commons',
-      code: 'HUB',
-      latitude: 37.7741,
-      longitude: -122.4205,
-      floorCount: 2,
-    },
-  });
-
-  console.log('🏢 Created seed buildings.');
-
-  // 5. Create Rooms
   const room101 = await prisma.room.create({
     data: {
-      buildingId: engineeringBuilding.id,
+      buildingId: engBuilding.id,
       roomNumber: 'ENG-101',
       floor: 1,
       capacity: 60,
@@ -122,7 +139,7 @@ async function main() {
 
   const room204 = await prisma.room.create({
     data: {
-      buildingId: engineeringBuilding.id,
+      buildingId: engBuilding.id,
       roomNumber: 'ENG-204',
       floor: 2,
       capacity: 35,
@@ -132,110 +149,166 @@ async function main() {
     },
   });
 
-  const roomLabA = await prisma.room.create({
-    data: {
-      buildingId: scienceBuilding.id,
-      roomNumber: 'SCI-LabA',
-      floor: 1,
-      capacity: 25,
-      hasAC: true,
-      hasProjector: false,
-      isOccupied: false,
-    },
-  });
-
-  console.log('🏫 Created seed classrooms.');
-
-  // 6. Create Classroom Bookings
-  const now = new Date();
-  const startTime = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
-  const endTime = new Date(now.getTime() + 3 * 60 * 60 * 1000); // 3 hours from now
-
   await prisma.booking.create({
     data: {
       roomId: room101.id,
       userId: facultyUser.id,
-      startTime,
-      endTime,
+      startTime: new Date(Date.now() + 3600000),
+      endTime: new Date(Date.now() + 7200000),
       purpose: 'CS401: Distributed Systems Lecture',
       status: BookingStatus.CONFIRMED,
     },
   });
 
-  // 7. Create Menu Items
+  console.log('🏫 Created classroom module seed data.');
+
+  // 5. Medical Help Module Data
+  const emergencyIncident = await prisma.emergency.create({
+    data: {
+      userId: studentUser.id,
+      buildingId: sciBuilding.id,
+      latitude: 37.7756,
+      longitude: -122.4184,
+      tag: EmergencyTag.INJURY,
+      description: 'Lab minor chemical splash, first-aid required on Floor 1',
+      status: EmergencyStatus.ASSIGNED,
+      responderId: responderUser.id,
+    },
+  });
+
+  const paracetamol = await prisma.medicine.create({
+    data: {
+      name: 'Paracetamol 500mg (10 Tabs)',
+      category: MedicineCategory.PAIN_RELIEF,
+      price: 2.5,
+      description: 'Relieves fever and mild to moderate body pain.',
+      stock: 120,
+      requiresPrescription: false,
+    },
+  });
+
+  const bandageKit = await prisma.medicine.create({
+    data: {
+      name: 'Sterile First Aid Bandage & Antiseptic Wipes',
+      category: MedicineCategory.FIRST_AID,
+      price: 4.99,
+      description: 'Emergency wound cleaning and waterproof bandaging kit.',
+      stock: 45,
+      requiresPrescription: false,
+    },
+  });
+
+  const coughSyrup = await prisma.medicine.create({
+    data: {
+      name: 'Amoxicillin Antibiotic 250mg',
+      category: MedicineCategory.PRESCRIPTION_ONLY,
+      price: 9.5,
+      description: 'Prescription required. Doctor note verification mandatory.',
+      stock: 20,
+      requiresPrescription: true,
+    },
+  });
+
+  await prisma.medicineOrder.create({
+    data: {
+      userId: studentUser.id,
+      totalAmount: 4.99,
+      status: MedicineOrderStatus.PREPARING,
+      pickupOrDelivery: 'DELIVERY',
+      deliveryAddress: 'Hostel Block B, Room 302',
+      items: {
+        create: [
+          { medicineId: bandageKit.id, quantity: 1, unitPrice: 4.99 },
+        ],
+      },
+    },
+  });
+
+  await prisma.consultation.create({
+    data: {
+      userId: studentUser.id,
+      type: ConsultationType.CALLBACK,
+      status: ConsultationStatus.REQUESTED,
+      note: 'Experiencing seasonal allergies, request advice on antihistamines.',
+    },
+  });
+
+  console.log('🏥 Created medical help module seed data.');
+
+  // 6. Cafeteria Module Data
   const coffee = await prisma.menuItem.create({
     data: {
       name: 'Cold Brew Artisan Coffee',
       description: 'Slow-steeped organic coffee with a splash of oat milk.',
       price: 4.5,
       category: MenuCategory.BEVERAGES,
+      isVeg: true,
+      spiceLevel: 0,
+      rating: 4.8,
       isAvailable: true,
-      imageUrl: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5',
     },
   });
 
-  const sandwich = await prisma.menuItem.create({
+  const panini = await prisma.menuItem.create({
     data: {
       name: 'Avocado & Grilled Chicken Panini',
-      description: 'Fresh sourdough with smoked gouda, pesto, and avocado.',
+      description: 'Fresh sourdough with smoked gouda, pesto, and grilled chicken.',
       price: 8.95,
       category: MenuCategory.LUNCH,
+      isVeg: false,
+      spiceLevel: 1,
+      rating: 4.7,
       isAvailable: true,
-      imageUrl: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af',
     },
   });
 
-  const croissant = await prisma.menuItem.create({
+  const brownie = await prisma.menuItem.create({
     data: {
-      name: 'Butter Croissant',
-      description: 'Flaky and golden French-style butter pastry.',
-      price: 3.25,
-      category: MenuCategory.BREAKFAST,
+      name: 'Fudge Walnut Brownie',
+      description: 'Rich dark chocolate baked brownie topped with walnuts.',
+      price: 3.5,
+      category: MenuCategory.DESSERTS,
+      isVeg: true,
+      spiceLevel: 0,
+      rating: 4.9,
       isAvailable: true,
-      imageUrl: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a',
     },
   });
 
-  console.log('🍔 Created cafeteria menu items.');
+  await prisma.offer.create({
+    data: {
+      title: 'Chef Special Combo 15% OFF',
+      description: 'Get Cold Brew Coffee + Chicken Panini for just \$11.40',
+      code: 'CAMPUS15',
+      discountPercent: 15,
+      isBanner: true,
+    },
+  });
 
-  // 8. Create Sample Order
-  const order = await prisma.order.create({
+  await prisma.order.create({
     data: {
       userId: studentUser.id,
       orderType: OrderType.PICKUP,
+      orderToken: '#ORD-104',
       status: OrderStatus.PREPARING,
       totalAmount: 13.45,
-      pickupTime: new Date(now.getTime() + 20 * 60 * 1000),
+      pickupTime: new Date(Date.now() + 1200000),
       note: 'Extra napkins please!',
       orderItems: {
         create: [
           { menuItemId: coffee.id, quantity: 1, unitPrice: 4.5 },
-          { menuItemId: sandwich.id, quantity: 1, unitPrice: 8.95 },
+          { menuItemId: panini.id, quantity: 1, unitPrice: 8.95 },
         ],
       },
     },
   });
 
-  console.log(`📦 Created sample order: ${order.id}`);
-
-  // 9. Create Sample Emergency Record
-  await prisma.emergency.create({
-    data: {
-      userId: studentUser.id,
-      buildingId: scienceBuilding.id,
-      latitude: 37.7756,
-      longitude: -122.4184,
-      description: 'Minor lab chemical burn, first-aid required in SCI-LabA',
-      status: EmergencyStatus.DISPATCHED,
-    },
-  });
-
-  console.log('🚨 Created sample emergency incident.');
-  console.log('✅ Database seed completed successfully!');
+  console.log('🍔 Created cafeteria module seed data.');
+  console.log('✅ Unified database seed completed successfully!');
 }
 
 main()
-  .catch((e) => {
+  .catch(e => {
     console.error('❌ Error during seed:', e);
     process.exit(1);
   })

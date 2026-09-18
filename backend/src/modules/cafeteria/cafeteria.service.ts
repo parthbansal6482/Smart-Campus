@@ -4,11 +4,12 @@ import { BadRequestError, NotFoundError } from '../../utils/errors';
 
 export class CafeteriaService {
   // Menu items
-  async getMenu(category?: MenuCategory, onlyAvailable = false) {
+  async getMenu(category?: MenuCategory, isVeg?: boolean, search?: string) {
     return prisma.menuItem.findMany({
       where: {
         category: category || undefined,
-        isAvailable: onlyAvailable ? true : undefined,
+        isVeg: isVeg !== undefined ? isVeg : undefined,
+        name: search ? { contains: search, mode: 'insensitive' } : undefined,
       },
       orderBy: { name: 'asc' },
     });
@@ -16,47 +17,36 @@ export class CafeteriaService {
 
   async getMenuItemById(id: string) {
     const item = await prisma.menuItem.findUnique({ where: { id } });
-    if (!item) {
-      throw new NotFoundError('Menu item not found');
-    }
+    if (!item) throw new NotFoundError('Menu item not found');
     return item;
   }
 
-  async createMenuItem(data: {
-    name: string;
-    description?: string;
-    price: number;
-    category?: MenuCategory;
-    isAvailable?: boolean;
-    imageUrl?: string;
-  }) {
+  async createMenuItem(data: any) {
     return prisma.menuItem.create({ data });
   }
 
-  async updateMenuItem(id: string, data: Partial<{
-    name: string;
-    description: string;
-    price: number;
-    category: MenuCategory;
-    isAvailable: boolean;
-    imageUrl: string;
-  }>) {
+  async updateMenuItem(id: string, data: any) {
     const item = await prisma.menuItem.findUnique({ where: { id } });
-    if (!item) {
-      throw new NotFoundError('Menu item not found');
-    }
+    if (!item) throw new NotFoundError('Menu item not found');
     return prisma.menuItem.update({ where: { id }, data });
   }
 
   async deleteMenuItem(id: string) {
     const item = await prisma.menuItem.findUnique({ where: { id } });
-    if (!item) {
-      throw new NotFoundError('Menu item not found');
-    }
+    if (!item) throw new NotFoundError('Menu item not found');
     return prisma.menuItem.delete({ where: { id } });
   }
 
-  // Orders
+  // Offers & Daily Specials
+  async getOffers() {
+    return prisma.offer.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
+  async createOffer(data: any) {
+    return prisma.offer.create({ data });
+  }
+
+  // Orders & Tokens
   async getOrders(userId?: string, status?: OrderStatus) {
     return prisma.order.findMany({
       where: {
@@ -65,9 +55,7 @@ export class CafeteriaService {
       },
       include: {
         user: { select: { id: true, name: true, email: true, phone: true } },
-        orderItems: {
-          include: { menuItem: true },
-        },
+        orderItems: { include: { menuItem: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -78,16 +66,10 @@ export class CafeteriaService {
       where: { id },
       include: {
         user: { select: { id: true, name: true, email: true, phone: true } },
-        orderItems: {
-          include: { menuItem: true },
-        },
+        orderItems: { include: { menuItem: true } },
       },
     });
-
-    if (!order) {
-      throw new NotFoundError('Order not found');
-    }
-
+    if (!order) throw new NotFoundError('Order not found');
     return order;
   }
 
@@ -95,6 +77,7 @@ export class CafeteriaService {
     userId: string,
     data: {
       orderType: OrderType;
+      tableNumber?: string;
       pickupTime?: string;
       note?: string;
       items: Array<{ menuItemId: string; quantity: number }>;
@@ -109,7 +92,6 @@ export class CafeteriaService {
       throw new BadRequestError('One or more selected menu items do not exist');
     }
 
-    // Verify availability & calculate total
     let totalAmount = 0;
     const orderItemData: Array<{ menuItemId: string; quantity: number; unitPrice: number }> = [];
 
@@ -126,17 +108,21 @@ export class CafeteriaService {
       });
     }
 
+    // Generate readable order token e.g. #ORD-108
+    const tokenNum = Math.floor(100 + Math.random() * 900);
+    const orderToken = `#ORD-${tokenNum}`;
+
     return prisma.order.create({
       data: {
         userId,
         orderType: data.orderType,
+        tableNumber: data.tableNumber,
+        orderToken,
         totalAmount,
         pickupTime: data.pickupTime ? new Date(data.pickupTime) : undefined,
         note: data.note,
-        status: OrderStatus.PENDING,
-        orderItems: {
-          create: orderItemData,
-        },
+        status: OrderStatus.PLACED,
+        orderItems: { create: orderItemData },
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
@@ -147,9 +133,7 @@ export class CafeteriaService {
 
   async updateOrderStatus(id: string, status: OrderStatus) {
     const order = await prisma.order.findUnique({ where: { id } });
-    if (!order) {
-      throw new NotFoundError('Order not found');
-    }
+    if (!order) throw new NotFoundError('Order not found');
 
     return prisma.order.update({
       where: { id },

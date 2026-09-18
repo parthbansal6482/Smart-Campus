@@ -1,4 +1,10 @@
-export type Role = 'STUDENT' | 'FACULTY' | 'STAFF' | 'ADMIN' | 'RESPONDER';
+export type Role =
+  | 'STUDENT'
+  | 'FACULTY'
+  | 'CAFETERIA_STAFF'
+  | 'MEDICAL_STAFF'
+  | 'AMBULANCE_RESPONDER'
+  | 'ADMIN';
 
 export interface User {
   id: string;
@@ -45,7 +51,15 @@ export interface Booking {
   user?: User;
 }
 
-export type EmergencyStatus = 'REPORTED' | 'DISPATCHED' | 'IN_PROGRESS' | 'RESOLVED' | 'CANCELLED';
+export type EmergencyStatus =
+  | 'REPORTED'
+  | 'ASSIGNED'
+  | 'ON_THE_WAY'
+  | 'ARRIVED'
+  | 'HANDLED'
+  | 'CANCELLED';
+
+export type EmergencyTag = 'FAINTED' | 'INJURY' | 'ALLERGIC_REACTION' | 'OTHER';
 
 export interface Emergency {
   id: string;
@@ -53,15 +67,62 @@ export interface Emergency {
   latitude: number;
   longitude: number;
   buildingId?: string;
+  tag: EmergencyTag;
   description?: string;
   status: EmergencyStatus;
+  responderId?: string;
   reportedAt: string;
   resolvedAt?: string;
   user?: User;
   building?: Building;
 }
 
-export type MenuCategory = 'BREAKFAST' | 'LUNCH' | 'SNACKS' | 'BEVERAGES' | 'SPECIAL';
+export type MedicineCategory = 'PAIN_RELIEF' | 'FIRST_AID' | 'COLD_FEVER' | 'PRESCRIPTION_ONLY' | 'GENERAL';
+
+export interface Medicine {
+  id: string;
+  name: string;
+  category: MedicineCategory;
+  price: number;
+  description?: string;
+  stock: number;
+  requiresPrescription: boolean;
+  imageUrl?: string;
+}
+
+export type MedicineOrderStatus = 'PLACED' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED';
+
+export interface MedicineOrder {
+  id: string;
+  userId: string;
+  totalAmount: number;
+  status: MedicineOrderStatus;
+  pickupOrDelivery: string;
+  deliveryAddress?: string;
+  prescriptionUrl?: string;
+  createdAt: string;
+  user?: User;
+  items?: Array<{
+    id: string;
+    quantity: number;
+    unitPrice: number;
+    medicine: Medicine;
+  }>;
+}
+
+export interface Consultation {
+  id: string;
+  userId: string;
+  type: 'CHAT' | 'CALLBACK' | 'APPOINTMENT';
+  status: 'REQUESTED' | 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+  slotTime?: string;
+  note?: string;
+  assignedTo?: string;
+  createdAt: string;
+  user?: User;
+}
+
+export type MenuCategory = 'BREAKFAST' | 'LUNCH' | 'SNACKS' | 'BEVERAGES' | 'DESSERTS' | 'SPECIAL';
 
 export interface MenuItem {
   id: string;
@@ -69,12 +130,15 @@ export interface MenuItem {
   description?: string;
   price: number;
   category: MenuCategory;
+  isVeg: boolean;
+  spiceLevel: number;
+  rating: number;
   isAvailable: boolean;
   imageUrl?: string;
 }
 
 export type OrderType = 'PICKUP' | 'DINE_IN';
-export type OrderStatus = 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED' | 'CANCELLED';
+export type OrderStatus = 'PLACED' | 'ACCEPTED' | 'PREPARING' | 'READY' | 'COLLECTED' | 'CANCELLED';
 
 export interface OrderItem {
   id: string;
@@ -89,6 +153,8 @@ export interface Order {
   id: string;
   userId: string;
   orderType: OrderType;
+  tableNumber?: string;
+  orderToken: string;
   status: OrderStatus;
   pickupTime?: string;
   totalAmount: number;
@@ -96,6 +162,16 @@ export interface Order {
   createdAt: string;
   user?: User;
   orderItems?: OrderItem[];
+}
+
+export interface Offer {
+  id: string;
+  title: string;
+  description?: string;
+  code: string;
+  discountPercent: number;
+  isBanner: boolean;
+  imageUrl?: string;
 }
 
 export interface ApiResponse<T = any> {

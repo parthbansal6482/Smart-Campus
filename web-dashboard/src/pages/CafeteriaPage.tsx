@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { cafeteriaService } from '../services/cafeteria.service';
 import { MenuItem, Order, OrderStatus } from '../types';
-import { Utensils, CheckCircle, Clock, ChefHat, Plus } from 'lucide-react';
+import { CheckCircle, ChefHat, Plus, Utensils } from 'lucide-react';
 
 export const CafeteriaPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -40,13 +40,14 @@ export const CafeteriaPage: React.FC = () => {
 
   const getOrderStatusVariant = (status: OrderStatus) => {
     switch (status) {
-      case 'PENDING':
+      case 'PLACED':
         return 'warning';
+      case 'ACCEPTED':
       case 'PREPARING':
         return 'info';
       case 'READY':
         return 'success';
-      case 'COMPLETED':
+      case 'COLLECTED':
         return 'default';
       default:
         return 'danger';
@@ -82,7 +83,7 @@ export const CafeteriaPage: React.FC = () => {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Menu Items ({menu.length})
+            Menu Catalog ({menu.length})
           </button>
         </div>
       </div>
@@ -98,13 +99,14 @@ export const CafeteriaPage: React.FC = () => {
                     id: 'ord-101',
                     userId: 'u1',
                     orderType: 'PICKUP' as const,
+                    orderToken: '#ORD-104',
                     status: 'PREPARING' as OrderStatus,
                     totalAmount: 13.45,
                     createdAt: new Date().toISOString(),
                     user: { name: 'Alex Johnson', email: 'student@smartcampus.edu' } as any,
                     orderItems: [
                       { id: '1', orderId: 'ord-101', menuItemId: 'm1', quantity: 1, unitPrice: 4.5, menuItem: { name: 'Cold Brew Artisan Coffee' } as any },
-                      { id: '2', orderId: 'ord-101', menuItemId: 'm2', quantity: 1, unitPrice: 8.95, menuItem: { name: 'Avocado & Grilled Chicken Panini' } as any },
+                      { id: '2', orderId: 'ord-101', menuItemId: 'm2', quantity: 1, unitPrice: 8.95, menuItem: { name: 'Avocado & Chicken Panini' } as any },
                     ],
                   },
                 ]
@@ -113,10 +115,10 @@ export const CafeteriaPage: React.FC = () => {
                 <div>
                   <CardHeader className="pb-3">
                     <div>
-                      <span className="text-[10px] font-mono text-slate-400 uppercase">
-                        #{order.id.slice(0, 8)}
+                      <span className="text-[11px] font-mono font-bold text-campus-700 uppercase bg-campus-50 px-2 py-0.5 rounded border border-campus-200/60">
+                        {order.orderToken || `#${order.id.slice(0, 6)}`}
                       </span>
-                      <p className="text-sm font-semibold text-slate-900">{order.user?.name || 'Customer'}</p>
+                      <p className="text-sm font-semibold text-slate-900 mt-1">{order.user?.name || 'Customer'}</p>
                     </div>
                     <Badge variant={getOrderStatusVariant(order.status)}>{order.status}</Badge>
                   </CardHeader>
@@ -134,7 +136,7 @@ export const CafeteriaPage: React.FC = () => {
                       ))}
                     </div>
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-900">
-                      <span>Total</span>
+                      <span>Total ({order.orderType})</span>
                       <span>\${order.totalAmount.toFixed(2)}</span>
                     </div>
                   </CardContent>
@@ -142,7 +144,7 @@ export const CafeteriaPage: React.FC = () => {
 
                 {/* Status Advancement Actions */}
                 <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
-                  {order.status === 'PENDING' && (
+                  {order.status === 'PLACED' && (
                     <Button
                       size="sm"
                       className="w-full"
@@ -166,13 +168,13 @@ export const CafeteriaPage: React.FC = () => {
                       size="sm"
                       variant="secondary"
                       className="w-full"
-                      onClick={() => handleStatusUpdate(order.id, 'COMPLETED')}
+                      onClick={() => handleStatusUpdate(order.id, 'COLLECTED')}
                     >
-                      Complete Handover
+                      Handover Complete
                     </Button>
                   )}
-                  {order.status === 'COMPLETED' && (
-                    <span className="text-xs text-slate-400 text-center w-full py-1">Order Completed</span>
+                  {order.status === 'COLLECTED' && (
+                    <span className="text-xs text-slate-400 text-center w-full py-1">Order Fulfilled</span>
                   )}
                 </div>
               </Card>
@@ -183,7 +185,7 @@ export const CafeteriaPage: React.FC = () => {
         /* Menu Management Table */
         <Card>
           <CardHeader>
-            <CardTitle>Cafeteria Daily Catalog</CardTitle>
+            <CardTitle>Cafeteria Food Catalog</CardTitle>
             <Button size="sm">
               <Plus className="w-4 h-4 mr-1" /> Add Menu Item
             </Button>
@@ -193,6 +195,7 @@ export const CafeteriaPage: React.FC = () => {
               <TableRow>
                 <TableHeaderCell>Item Name</TableHeaderCell>
                 <TableHeaderCell>Category</TableHeaderCell>
+                <TableHeaderCell>Dietary</TableHeaderCell>
                 <TableHeaderCell>Price</TableHeaderCell>
                 <TableHeaderCell>Availability</TableHeaderCell>
               </TableRow>
@@ -201,15 +204,19 @@ export const CafeteriaPage: React.FC = () => {
               {(menu.length > 0
                 ? menu
                 : [
-                    { id: '1', name: 'Cold Brew Artisan Coffee', category: 'BEVERAGES' as const, price: 4.5, isAvailable: true },
-                    { id: '2', name: 'Avocado & Grilled Chicken Panini', category: 'LUNCH' as const, price: 8.95, isAvailable: true },
-                    { id: '3', name: 'Butter Croissant', category: 'BREAKFAST' as const, price: 3.25, isAvailable: true },
+                    { id: '1', name: 'Cold Brew Artisan Coffee', category: 'BEVERAGES' as const, isVeg: true, price: 4.5, isAvailable: true, spiceLevel: 0, rating: 4.8 },
+                    { id: '2', name: 'Avocado & Chicken Panini', category: 'LUNCH' as const, isVeg: false, price: 8.95, isAvailable: true, spiceLevel: 1, rating: 4.7 },
                   ]
               ).map(item => (
                 <TableRow key={item.id}>
                   <TableCell className="font-semibold text-slate-900">{item.name}</TableCell>
                   <TableCell>
                     <Badge variant="purple">{item.category}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={item.isVeg ? 'success' : 'danger'}>
+                      {item.isVeg ? 'VEG' : 'NON-VEG'}
+                    </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs">\${item.price.toFixed(2)}</TableCell>
                   <TableCell>

@@ -11,9 +11,10 @@ datasource db {
 enum Role {
   STUDENT
   FACULTY
-  STAFF
+  CAFETERIA_STAFF
+  MEDICAL_STAFF
+  AMBULANCE_RESPONDER
   ADMIN
-  RESPONDER
 }
 
 enum BookingStatus {
@@ -25,9 +26,46 @@ enum BookingStatus {
 
 enum EmergencyStatus {
   REPORTED
-  DISPATCHED
-  IN_PROGRESS
-  RESOLVED
+  ASSIGNED
+  ON_THE_WAY
+  ARRIVED
+  HANDLED
+  CANCELLED
+}
+
+enum EmergencyTag {
+  FAINTED
+  INJURY
+  ALLERGIC_REACTION
+  OTHER
+}
+
+enum MedicineCategory {
+  PAIN_RELIEF
+  FIRST_AID
+  COLD_FEVER
+  PRESCRIPTION_ONLY
+  GENERAL
+}
+
+enum MedicineOrderStatus {
+  PLACED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum ConsultationType {
+  CHAT
+  CALLBACK
+  APPOINTMENT
+}
+
+enum ConsultationStatus {
+  REQUESTED
+  SCHEDULED
+  COMPLETED
   CANCELLED
 }
 
@@ -37,10 +75,11 @@ enum OrderType {
 }
 
 enum OrderStatus {
-  PENDING
+  PLACED
+  ACCEPTED
   PREPARING
   READY
-  COMPLETED
+  COLLECTED
   CANCELLED
 }
 
@@ -49,9 +88,13 @@ enum MenuCategory {
   LUNCH
   SNACKS
   BEVERAGES
+  DESSERTS
   SPECIAL
 }
 
+// -------------------------------------------------------------
+// USER & SHARED AUTH
+// -------------------------------------------------------------
 model User {
   id           String        @id @default(uuid())
   name         String
@@ -62,15 +105,20 @@ model User {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
-  bookings     Booking[]
-  emergencies  Emergency[]
-  orders       Order[]
+  bookings          Booking[]
+  emergencies       Emergency[]
+  medicineOrders    MedicineOrder[]
+  consultations     Consultation[]
+  orders            Order[]
 
   @@index([email])
   @@index([role])
   @@map("users")
 }
 
+// -------------------------------------------------------------
+// MODULE 1: CLASSROOM MANAGEMENT (LOGIC PRESERVED)
+// -------------------------------------------------------------
 model Building {
   id          String      @id @default(uuid())
   name        String
@@ -125,14 +173,19 @@ model Booking {
   @@map("bookings")
 }
 
+// -------------------------------------------------------------
+// MODULE 2: MEDICAL HELP (EXPANDED)
+// -------------------------------------------------------------
 model Emergency {
   id          String          @id @default(uuid())
   userId      String          @map("user_id")
   latitude    Float
   longitude   Float
   buildingId  String?         @map("building_id")
+  tag         EmergencyTag    @default(OTHER)
   description String?
   status      EmergencyStatus @default(REPORTED)
+  responderId String?         @map("responder_id")
   reportedAt  DateTime        @default(now()) @map("reported_at")
   resolvedAt  DateTime?       @map("resolved_at")
 
@@ -145,12 +198,83 @@ model Emergency {
   @@map("emergencies")
 }
 
+model Medicine {
+  id                   String           @id @default(uuid())
+  name                 String
+  category             MedicineCategory @default(GENERAL)
+  price                Float
+  description          String?
+  stock                Int              @default(50)
+  requiresPrescription Boolean          @default(false) @map("requires_prescription")
+  imageUrl             String?          @map("image_url")
+  createdAt            DateTime         @default(now()) @map("created_at")
+
+  orderItems           MedicineOrderItem[]
+
+  @@index([category])
+  @@map("medicines")
+}
+
+model MedicineOrder {
+  id                String              @id @default(uuid())
+  userId            String              @map("user_id")
+  totalAmount       Float               @map("total_amount")
+  status            MedicineOrderStatus @default(PLACED)
+  pickupOrDelivery  String              @default("PICKUP") @map("pickup_or_delivery")
+  deliveryAddress   String?             @map("delivery_address")
+  prescriptionUrl   String?             @map("prescription_url")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items             MedicineOrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("medicine_orders")
+}
+
+model MedicineOrderItem {
+  id              String        @id @default(uuid())
+  medicineOrderId String        @map("medicine_order_id")
+  medicineId      String        @map("medicine_id")
+  quantity        Int           @default(1)
+  unitPrice       Float         @map("unit_price")
+
+  medicineOrder   MedicineOrder @relation(fields: [medicineOrderId], references: [id], onDelete: Cascade)
+  medicine        Medicine      @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@map("medicine_order_items")
+}
+
+model Consultation {
+  id          String             @id @default(uuid())
+  userId      String             @map("user_id")
+  type        ConsultationType   @default(CALLBACK)
+  status      ConsultationStatus @default(REQUESTED)
+  slotTime    DateTime?          @map("slot_time")
+  note        String?
+  assignedTo  String?            @map("assigned_to")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("consultations")
+}
+
+// -------------------------------------------------------------
+// MODULE 3: CAFETERIA FOOD ORDERING (EXPANDED)
+// -------------------------------------------------------------
 model MenuItem {
   id          String       @id @default(uuid())
   name        String
   description String?
   price       Float
   category    MenuCategory @default(SNACKS)
+  isVeg       Boolean      @default(true) @map("is_veg")
+  spiceLevel  Int          @default(0) @map("spice_level")
+  rating      Float        @default(4.5)
   isAvailable Boolean      @default(true) @map("is_available")
   imageUrl    String?      @map("image_url")
   createdAt   DateTime     @default(now()) @map("created_at")
@@ -158,6 +282,7 @@ model MenuItem {
   orderItems  OrderItem[]
 
   @@index([category])
+  @@index([isVeg])
   @@index([isAvailable])
   @@map("menu_items")
 }
@@ -166,7 +291,9 @@ model Order {
   id          String      @id @default(uuid())
   userId      String      @map("user_id")
   orderType   OrderType   @default(PICKUP) @map("order_type")
-  status      OrderStatus @default(PENDING)
+  tableNumber String?     @map("table_number")
+  orderToken  String      @map("order_token")
+  status      OrderStatus @default(PLACED)
   pickupTime  DateTime?   @map("pickup_time")
   totalAmount Float       @map("total_amount")
   note        String?
@@ -194,4 +321,17 @@ model OrderItem {
 
   @@index([orderId])
   @@map("order_items")
+}
+
+model Offer {
+  id             String   @id @default(uuid())
+  title          String
+  description    String?
+  code           String   @unique
+  discountPercent Float   @map("discount_percent")
+  isBanner       Boolean  @default(true) @map("is_banner")
+  imageUrl       String?  @map("image_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("offers")
 }

@@ -6,6 +6,9 @@ import { AuthNavigator } from './AuthNavigator';
 import { BottomTabNavigator } from './BottomTabNavigator';
 import { BookRoomScreen } from '../screens/BookRoomScreen';
 import { EmergencyScreen } from '../screens/EmergencyScreen';
+import { MedicineStoreScreen } from '../screens/MedicineStoreScreen';
+import { TalkToStaffScreen } from '../screens/TalkToStaffScreen';
+import { MedicalCenterInfoScreen } from '../screens/MedicalCenterInfoScreen';
 import { MenuDetailScreen } from '../screens/MenuDetailScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
 import { EmergencyFab } from '../components/EmergencyFab';
@@ -45,9 +48,24 @@ export const RootNavigator: React.FC = () => {
               options={{ title: 'Reserve Classroom' }}
             />
             <Stack.Screen
+              name="MedicineStore"
+              component={MedicineStoreScreen}
+              options={{ title: 'Campus Pharmacy Store' }}
+            />
+            <Stack.Screen
+              name="TalkToStaff"
+              component={TalkToStaffScreen}
+              options={{ title: 'Talk to Medical Staff' }}
+            />
+            <Stack.Screen
+              name="MedicalCenterInfo"
+              component={MedicalCenterInfoScreen}
+              options={{ title: 'Medical Center Info' }}
+            />
+            <Stack.Screen
               name="MenuDetail"
               component={MenuDetailScreen}
-              options={{ title: 'Menu Item' }}
+              options={{ title: 'Customize Food Item' }}
             />
             <Stack.Screen
               name="Orders"
@@ -66,7 +84,7 @@ export const RootNavigator: React.FC = () => {
         )}
       </Stack.Navigator>
 
-      {/* Always-accessible Floating SOS button for authenticated students & faculty */}
+      {/* Floating Emergency SOS button accessible across screens */}
       {isAuthenticated && <EmergencyFab />}
     </View>
   );

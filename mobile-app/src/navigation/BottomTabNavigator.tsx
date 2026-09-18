@@ -3,10 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../types';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ClassroomsScreen } from '../screens/ClassroomsScreen';
+import { MedicalHelpScreen } from '../screens/MedicalHelpScreen';
 import { CafeteriaScreen } from '../screens/CafeteriaScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { colors, typography } from '../theme';
-import { Home, GraduationCap, UtensilsCrossed, User } from 'lucide-react-native';
+import { Home, GraduationCap, HeartPulse, UtensilsCrossed, User } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -30,7 +31,7 @@ export const BottomTabNavigator: React.FC = () => {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.borderLight,
-          height: 60,
+          height: 62,
           paddingBottom: 8,
           paddingTop: 8,
         },
@@ -56,8 +57,17 @@ export const BottomTabNavigator: React.FC = () => {
         component={ClassroomsScreen}
         options={{
           title: 'Classrooms & Labs',
-          tabBarLabel: 'Rooms',
+          tabBarLabel: 'Classrooms',
           tabBarIcon: ({ color, size }) => <GraduationCap color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="MedicalHelpTab"
+        component={MedicalHelpScreen}
+        options={{
+          title: 'Medical Help',
+          tabBarLabel: 'Medical',
+          tabBarIcon: ({ color, size }) => <HeartPulse color={color} size={size} />,
         }}
       />
       <Tab.Screen
@@ -65,7 +75,7 @@ export const BottomTabNavigator: React.FC = () => {
         component={CafeteriaScreen}
         options={{
           title: 'Campus Cafeteria',
-          tabBarLabel: 'Food',
+          tabBarLabel: 'Cafeteria',
           tabBarIcon: ({ color, size }) => <UtensilsCrossed color={color} size={size} />,
         }}
       />

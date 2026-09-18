@@ -7,7 +7,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { authRoutes } from './modules/auth/auth.routes';
 import { userRoutes } from './modules/users/users.routes';
 import { classroomRoutes } from './modules/classrooms/classrooms.routes';
-import { emergencyRoutes } from './modules/emergency/emergency.routes';
+import { medicalRoutes } from './modules/medical-help/medical.routes';
 import { cafeteriaRoutes } from './modules/cafeteria/cafeteria.routes';
 import { sendSuccess } from './utils/response';
 import { NotFoundError } from './utils/errors';
@@ -19,7 +19,7 @@ export const createApp = (): Application => {
   app.use(helmet());
   app.use(
     cors({
-      origin: '*', // Allow web and mobile clients
+      origin: '*',
       credentials: true,
     })
   );
@@ -27,26 +27,32 @@ export const createApp = (): Application => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Apply rate limiting to all api routes
+  // Apply rate limiting
   app.use('/api', apiLimiter);
 
   // Health check
   app.get('/health', (req: Request, res: Response) => {
-    return sendSuccess(res, {
-      status: 'ok',
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-    }, 'Smart Campus API is healthy');
+    return sendSuccess(
+      res,
+      {
+        status: 'ok',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+      },
+      'Smart Campus Unified API is healthy'
+    );
   });
 
-  // Feature routes
+  // Modular API routes
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/users', userRoutes);
-  app.use('/api/v1/classrooms', classroomRoutes);
-  app.use('/api/v1/emergency', emergencyRoutes);
+  app.use('/api/v1/classroom', classroomRoutes);
+  app.use('/api/v1/classrooms', classroomRoutes); // Alias
+  app.use('/api/v1/medical-help', medicalRoutes);
+  app.use('/api/v1/emergency', medicalRoutes); // Alias
   app.use('/api/v1/cafeteria', cafeteriaRoutes);
 
-  // 404 handler for unknown routes
+  // 404 handler
   app.use('*', (req: Request, res: Response, next) => {
     next(new NotFoundError(`Endpoint ${req.originalUrl} not found`));
   });

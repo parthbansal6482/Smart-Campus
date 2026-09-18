@@ -7,7 +7,6 @@ import { User, Role } from '../types';
 
 export const UsersPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const loadUsers = async () => {
     try {
@@ -15,8 +14,6 @@ export const UsersPage: React.FC = () => {
       setUsers(res.data.data);
     } catch (err) {
       console.error('Failed to load users', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -30,10 +27,11 @@ export const UsersPage: React.FC = () => {
         return 'danger';
       case 'FACULTY':
         return 'info';
-      case 'STAFF':
-        return 'purple';
-      case 'RESPONDER':
+      case 'CAFETERIA_STAFF':
         return 'warning';
+      case 'MEDICAL_STAFF':
+      case 'AMBULANCE_RESPONDER':
+        return 'purple';
       default:
         return 'default';
     }
@@ -69,8 +67,9 @@ export const UsersPage: React.FC = () => {
                   { id: '1', name: 'System Administrator', email: 'admin@smartcampus.edu', role: 'ADMIN' as Role, phone: '+1-555-0101', createdAt: new Date().toISOString() },
                   { id: '2', name: 'Dr. Sarah Connor', email: 'faculty@smartcampus.edu', role: 'FACULTY' as Role, phone: '+1-555-0102', createdAt: new Date().toISOString() },
                   { id: '3', name: 'Alex Johnson', email: 'student@smartcampus.edu', role: 'STUDENT' as Role, phone: '+1-555-0103', createdAt: new Date().toISOString() },
-                  { id: '4', name: 'Chef Gordon', email: 'staff@smartcampus.edu', role: 'STAFF' as Role, phone: '+1-555-0104', createdAt: new Date().toISOString() },
-                  { id: '5', name: 'Campus EMT Team', email: 'responder@smartcampus.edu', role: 'RESPONDER' as Role, phone: '+1-555-0105', createdAt: new Date().toISOString() },
+                  { id: '4', name: 'Chef Gordon', email: 'cafeteria@smartcampus.edu', role: 'CAFETERIA_STAFF' as Role, phone: '+1-555-0104', createdAt: new Date().toISOString() },
+                  { id: '5', name: 'Dr. House', email: 'medical@smartcampus.edu', role: 'MEDICAL_STAFF' as Role, phone: '+1-555-0105', createdAt: new Date().toISOString() },
+                  { id: '6', name: 'Ambulance Unit 1', email: 'responder@smartcampus.edu', role: 'AMBULANCE_RESPONDER' as Role, phone: '+1-555-0106', createdAt: new Date().toISOString() },
                 ]
             ).map(user => (
               <TableRow key={user.id}>

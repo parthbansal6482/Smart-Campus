@@ -1,24 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '../components/ui/Table';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { emergencyService } from '../services/emergency.service';
+import { medicalService } from '../services/medical.service';
 import { Emergency, EmergencyStatus } from '../types';
-import { AlertCircle, Phone, MapPin, CheckCircle, ShieldAlert } from 'lucide-react';
+import { MapPin, Phone, ShieldAlert, CheckCircle } from 'lucide-react';
 
 export const EmergenciesPage: React.FC = () => {
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const loadEmergencies = async () => {
     try {
-      const data = await emergencyService.getAll();
+      const data = await medicalService.getAllEmergencies();
       setEmergencies(data);
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -28,7 +25,7 @@ export const EmergenciesPage: React.FC = () => {
 
   const handleStatusChange = async (id: string, status: EmergencyStatus) => {
     try {
-      const updated = await emergencyService.updateStatus(id, status);
+      const updated = await medicalService.updateEmergencyStatus(id, status);
       setEmergencies(prev => prev.map(e => (e.id === id ? updated : e)));
     } catch (err) {
       console.error('Failed to update status', err);
@@ -39,11 +36,12 @@ export const EmergenciesPage: React.FC = () => {
     switch (status) {
       case 'REPORTED':
         return 'danger';
-      case 'DISPATCHED':
+      case 'ASSIGNED':
+      case 'ON_THE_WAY':
         return 'warning';
-      case 'IN_PROGRESS':
+      case 'ARRIVED':
         return 'info';
-      case 'RESOLVED':
+      case 'HANDLED':
         return 'success';
       default:
         return 'default';
@@ -54,7 +52,7 @@ export const EmergenciesPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Emergency & Health Assistance Dispatch</h2>
+          <h2 className="text-xl font-bold text-slate-900">Emergency & Ambulance Dispatch</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Real-time incident feed, victim geolocation, and responder unit dispatching
           </p>
@@ -64,21 +62,20 @@ export const EmergenciesPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Incident Log Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-rose-600" />
-            <CardTitle>Campus Incident Log</CardTitle>
+            <CardTitle>Campus Emergency Incidents</CardTitle>
           </div>
         </CardHeader>
         <Table>
           <TableHead>
             <TableRow>
               <TableHeaderCell>Incident Status</TableHeaderCell>
+              <TableHeaderCell>Tag & Detail</TableHeaderCell>
               <TableHeaderCell>Caller / Victim</TableHeaderCell>
               <TableHeaderCell>Location & Building</TableHeaderCell>
-              <TableHeaderCell>Details</TableHeaderCell>
               <TableHeaderCell>Reported Time</TableHeaderCell>
               <TableHeaderCell className="text-right">Dispatch Actions</TableHeaderCell>
             </TableRow>
@@ -92,19 +89,22 @@ export const EmergenciesPage: React.FC = () => {
                     userId: 'u1',
                     latitude: 37.7756,
                     longitude: -122.4184,
-                    status: 'DISPATCHED' as EmergencyStatus,
-                    description: 'Minor lab chemical burn, first-aid required in SCI-LabA',
+                    tag: 'INJURY' as const,
+                    status: 'ASSIGNED' as EmergencyStatus,
+                    description: 'Lab minor chemical splash, first-aid required in SCI-LabA',
                     reportedAt: new Date().toISOString(),
-                    building: { name: 'Marie Curie Science Complex', code: 'SCI', id: 'b2', latitude: 0, longitude: 0, floorCount: 3 },
-                    user: { name: 'Alex Johnson', email: 'student@smartcampus.edu', phone: '+1-555-0103', id: 'u1', role: 'STUDENT' as const, createdAt: '' },
+                    building: { name: 'Marie Curie Science Complex', code: 'SCI' } as any,
+                    user: { name: 'Alex Johnson', email: 'student@smartcampus.edu', phone: '+1-555-0103' } as any,
                   },
                 ]
             ).map(incident => (
               <TableRow key={incident.id}>
                 <TableCell>
-                  <Badge variant={getStatusBadgeVariant(incident.status)}>
-                    {incident.status}
-                  </Badge>
+                  <Badge variant={getStatusBadgeVariant(incident.status)}>{incident.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="purple" className="mb-1">{incident.tag || 'OTHER'}</Badge>
+                  <p className="text-xs text-slate-600 max-w-xs truncate">{incident.description || 'Emergency alert'}</p>
                 </TableCell>
                 <TableCell>
                   <p className="text-xs font-semibold text-slate-900">{incident.user?.name || 'Campus Member'}</p>
@@ -117,53 +117,40 @@ export const EmergenciesPage: React.FC = () => {
                   <div className="flex items-start gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-xs font-medium text-slate-900">
-                        {incident.building?.name || 'Open Campus Area'}
-                      </p>
+                      <p className="text-xs font-medium text-slate-900">{incident.building?.name || 'Open Campus Area'}</p>
                       <p className="text-[10px] text-slate-400 font-mono">
                         {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}
                       </p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="max-w-xs truncate text-xs text-slate-600">
-                  {incident.description || 'Emergency one-tap alert triggered'}
-                </TableCell>
                 <TableCell className="text-xs text-slate-500">
                   {new Date(incident.reportedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </TableCell>
                 <TableCell className="text-right space-x-1.5">
                   {incident.status === 'REPORTED' && (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => handleStatusChange(incident.id, 'DISPATCHED')}
-                    >
-                      Dispatch Team
+                    <Button size="sm" variant="danger" onClick={() => handleStatusChange(incident.id, 'ASSIGNED')}>
+                      Assign Responder
                     </Button>
                   )}
-                  {incident.status === 'DISPATCHED' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleStatusChange(incident.id, 'IN_PROGRESS')}
-                    >
-                      Mark On Scene
+                  {incident.status === 'ASSIGNED' && (
+                    <Button size="sm" variant="outline" onClick={() => handleStatusChange(incident.id, 'ON_THE_WAY')}>
+                      On the Way
                     </Button>
                   )}
-                  {(incident.status === 'IN_PROGRESS' || incident.status === 'DISPATCHED') && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-                      onClick={() => handleStatusChange(incident.id, 'RESOLVED')}
-                    >
-                      Resolve Incident
+                  {incident.status === 'ON_THE_WAY' && (
+                    <Button size="sm" variant="outline" onClick={() => handleStatusChange(incident.id, 'ARRIVED')}>
+                      Mark Arrived
                     </Button>
                   )}
-                  {incident.status === 'RESOLVED' && (
+                  {incident.status === 'ARRIVED' && (
+                    <Button size="sm" variant="secondary" className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100" onClick={() => handleStatusChange(incident.id, 'HANDLED')}>
+                      Mark Handled
+                    </Button>
+                  )}
+                  {incident.status === 'HANDLED' && (
                     <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                      <CheckCircle className="w-3.5 h-3.5" /> Resolved
+                      <CheckCircle className="w-3.5 h-3.5" /> Handled
                     </span>
                   )}
                 </TableCell>
