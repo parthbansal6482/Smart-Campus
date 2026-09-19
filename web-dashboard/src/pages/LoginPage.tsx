@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { getDefaultRouteForRole } from '../routes/ProtectedRoute';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
@@ -17,7 +18,9 @@ export const LoginPage: React.FC = () => {
     setError(null);
     try {
       await login(email, password);
-      navigate('/');
+      const currentUser = useAuthStore.getState().user;
+      const targetRoute = getDefaultRouteForRole(currentUser?.role);
+      navigate(targetRoute);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed. Please verify your credentials.');
     }
@@ -75,7 +78,14 @@ export const LoginPage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => handleQuickFill('staff@smartcampus.edu')}
+            onClick={() => handleQuickFill('medical@smartcampus.edu')}
+            className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 transition-colors"
+          >
+            Medical Staff
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickFill('cafeteria@smartcampus.edu')}
             className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 transition-colors"
           >
             Cafeteria Staff
@@ -86,6 +96,13 @@ export const LoginPage: React.FC = () => {
             className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 transition-colors"
           >
             Responder
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickFill('faculty@smartcampus.edu')}
+            className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 transition-colors"
+          >
+            Faculty
           </button>
         </div>
       </div>
