@@ -28,10 +28,12 @@ export const LoginScreen: React.FC = () => {
     try {
       await login(email, password);
     } catch (err: any) {
-      Alert.alert(
-        'Login Failed',
-        err.response?.data?.message || 'Please check your campus credentials.'
-      );
+      const errorMessage =
+        err.response?.data?.message ||
+        (err.message === 'Network Error' || !err.response
+          ? 'Cannot connect to backend server. Make sure your server is running and accessible.'
+          : 'Please check your campus credentials.');
+      Alert.alert('Login Failed', errorMessage);
     }
   };
 
