@@ -3,12 +3,30 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --brand-ink: #0f172a;
+    --brand-accent: #2563eb;
+    --brand-surface: #ffffff;
+    --brand-border: #e2e8f0;
+    --brand-bg: #f8fafc;
+  }
+
   body {
-    @apply bg-[#f8fafc] text-slate-800 antialiased font-sans;
+    @apply bg-slate-50 text-slate-900 antialiased font-sans selection:bg-blue-100 selection:text-blue-900;
+  }
+
+  /* Accessible high-contrast focus rings */
+  :focus-visible {
+    @apply outline-none ring-2 ring-blue-600/70 ring-offset-2 ring-offset-white;
   }
 }
 
-/* Custom scrollbar for modern subtle look */
+/* Tabular figures for operational metrics and clocks */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle, unobtrusive executive scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

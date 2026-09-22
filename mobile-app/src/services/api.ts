@@ -1,6 +1,5 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const getBaseUrl = () => {
@@ -9,12 +8,18 @@ const getBaseUrl = () => {
   }
 
   // Detect Expo host IP for physical devices running via Expo Go
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const hostIp = hostUri.split(':')[0];
-    if (hostIp) {
-      return `http://${hostIp}:5001/api/v1`;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Constants = require('expo-constants')?.default || require('expo-constants');
+    const hostUri = Constants?.expoConfig?.hostUri;
+    if (hostUri) {
+      const hostIp = hostUri.split(':')[0];
+      if (hostIp) {
+        return `http://${hostIp}:5001/api/v1`;
+      }
     }
+  } catch {
+    // Fallback if expo-constants is not loaded
   }
 
   // Android Emulator fallback

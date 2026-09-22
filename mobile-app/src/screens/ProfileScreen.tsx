@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { colors, spacing, typography } from '../theme';
 import { Card } from '../components/Card';
 import { ListItem } from '../components/ListItem';
@@ -13,6 +13,11 @@ import {
   LogOut,
   MapPin,
   CalendarCheck,
+  CreditCard,
+  QrCode,
+  CheckCircle2,
+  PhoneCall,
+  Utensils,
 } from 'lucide-react-native';
 
 export const ProfileScreen: React.FC = () => {
@@ -20,60 +25,104 @@ export const ProfileScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Profile Header */}
-      <View style={styles.userCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
+      {/* Digital Campus ID Card */}
+      <View style={styles.idCard}>
+        <View style={styles.idCardHeader}>
+          <View>
+            <Text style={styles.idCardOrg}>SMART CAMPUS UNIFIED SYSTEM</Text>
+            <Text style={styles.idCardType}>DIGITAL IDENTITY PASS</Text>
+          </View>
+          <View style={styles.activePill}>
+            <View style={styles.activeDot} />
+            <Text style={styles.activeText}>ACTIVE</Text>
+          </View>
         </View>
-        <Text style={styles.userName}>{user?.name || 'Alex Johnson'}</Text>
-        <Text style={styles.userEmail}>{user?.email || 'student@smartcampus.edu'}</Text>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{user?.role || 'STUDENT'}</Text>
+
+        <View style={styles.idCardBody}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.userName}>{user?.name || 'Alex Johnson'}</Text>
+            <Text style={styles.userEmail}>{user?.email || 'student@smartcampus.edu'}</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>ID:</Text>
+              <Text style={styles.metaValue}>SC-2026-8941</Text>
+              <Text style={styles.metaDivider}>•</Text>
+              <Text style={styles.metaLabel}>ROLE:</Text>
+              <Text style={styles.roleTag}>{user?.role || 'STUDENT'}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.idCardFooter}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <CheckCircle2 size={13} color="#94a3b8" />
+            <Text style={styles.idCardSub}>Verified by Campus Registrar • Spring 2026</Text>
+          </View>
+          <QrCode size={18} color="#94a3b8" />
         </View>
       </View>
 
-      {/* Account Settings */}
-      <Text style={styles.sectionHeader}>Campus Account</Text>
-      <Card>
+      {/* Academic & Campus Services */}
+      <Text style={styles.sectionHeader}>Campus & Facility Records</Text>
+      <Card style={styles.menuCard}>
         <ListItem
           title="Active Room Bookings"
-          subtitle="1 upcoming classroom reservation"
-          leftIcon={<CalendarCheck size={20} color={colors.primary} />}
-          onPress={() => {}}
+          subtitle="1 upcoming classroom reservation in ENG-204"
+          leftIcon={<CalendarCheck size={18} color="#2563eb" />}
+          onPress={() => Alert.alert('Reservations', 'You have ENG-204 booked today at 2:00 PM.')}
         />
+        <View style={styles.divider} />
         <ListItem
-          title="Notifications & Alerts"
-          subtitle="Push notifications for emergency broadcasts"
-          leftIcon={<Bell size={20} color={colors.pastelAmberDark} />}
-          onPress={() => {}}
+          title="Cafeteria Tray & Meal History"
+          subtitle="View digital receipt tokens & order statuses"
+          leftIcon={<Utensils size={18} color="#d97706" />}
+          onPress={() => Alert.alert('Meal History', 'Last order: Cold Brew Artisan Coffee (Collected).')}
         />
+        <View style={styles.divider} />
         <ListItem
-          title="Campus Security & Privacy"
-          subtitle="Location permissions and emergency sharing"
-          leftIcon={<Shield size={20} color={colors.success} />}
-          onPress={() => {}}
+          title="Emergency Contacts & Medical Info"
+          subtitle="Blood group: O+ • Allergy tags updated"
+          leftIcon={<Shield size={18} color="#059669" />}
+          onPress={() => Alert.alert('Medical Profile', 'Emergency contact: +1-555-0199')}
         />
       </Card>
 
-      {/* Support */}
-      <Text style={styles.sectionHeader}>Support & Help</Text>
-      <Card>
+      {/* Preferences & Security */}
+      <Text style={styles.sectionHeader}>Preferences & Device Security</Text>
+      <Card style={styles.menuCard}>
         <ListItem
-          title="Campus Support Hotline"
-          subtitle="+1-555-0100"
-          leftIcon={<HelpCircle size={20} color={colors.textSecondary} />}
-          onPress={() => {}}
+          title="Emergency Broadcast Notifications"
+          subtitle="Instant high-priority sirens for severe alerts"
+          leftIcon={<Bell size={18} color="#7c3aed" />}
+          onPress={() => Alert.alert('Alert Preferences', 'Push alerts are currently enabled.')}
+        />
+        <View style={styles.divider} />
+        <ListItem
+          title="Campus Security Helpline"
+          subtitle="24/7 Security Operations Center (+1-555-0100)"
+          leftIcon={<PhoneCall size={18} color="#64748b" />}
+          onPress={() => Alert.alert('Campus Security', 'Call +1-555-0100 for non-medical emergencies.')}
         />
       </Card>
 
-      <Button
-        title="Log Out"
-        variant="outline"
-        onPress={logout}
-        leftIcon={<LogOut size={18} color={colors.emergency} />}
+      {/* Log Out Button */}
+      <TouchableOpacity
         style={styles.logoutBtn}
-        textStyle={{ color: colors.emergency }}
-      />
+        onPress={() => {
+          Alert.alert('Sign Out', 'Are you sure you want to sign out of Smart Campus?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Sign Out', style: 'destructive', onPress: logout },
+          ]);
+        }}
+        activeOpacity={0.8}
+      >
+        <LogOut size={16} color="#dc2626" />
+        <Text style={styles.logoutText}>Sign Out of Campus ID</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.versionText}>Smart Campus Unified App • v2.4.0 (Build 2026.09)</Text>
     </ScrollView>
   );
 };
@@ -81,64 +130,183 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f8fafc',
   },
   content: {
     padding: spacing.lg,
     paddingBottom: 100,
   },
-  userCard: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
+  idCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: spacing.md + 2,
     marginBottom: spacing.md,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  idCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    paddingBottom: spacing.sm,
+  },
+  idCardOrg: {
+    fontSize: 9,
+    fontWeight: typography.weights.bold,
+    color: '#94a3b8',
+    letterSpacing: 0.8,
+  },
+  idCardType: {
+    fontSize: 13,
+    fontWeight: typography.weights.bold,
+    color: '#ffffff',
+    letterSpacing: 0.5,
+    marginTop: 1,
+  },
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#064e3b',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+  },
+  activeText: {
+    fontSize: 9,
+    fontWeight: typography.weights.bold,
+    color: '#34d399',
+    letterSpacing: 0.5,
+  },
+  idCardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary,
+    width: 54,
+    height: 54,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: typography.weights.bold,
     color: '#ffffff',
   },
   userName: {
-    fontSize: typography.sizes.lg,
+    fontSize: 16,
     fontWeight: typography.weights.bold,
-    color: colors.textPrimary,
+    color: '#ffffff',
   },
   userEmail: {
-    fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#94a3b8',
     marginTop: 2,
   },
-  badge: {
-    backgroundColor: colors.pastelBlue,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: spacing.borderRadius.full,
-    marginTop: spacing.sm,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 4,
   },
-  badgeText: {
-    fontSize: typography.sizes.xs,
+  metaLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: typography.weights.semibold,
+  },
+  metaValue: {
+    fontSize: 10,
+    color: '#cbd5e1',
     fontWeight: typography.weights.bold,
-    color: colors.pastelBlueDark,
+    fontVariant: ['tabular-nums'],
+  },
+  metaDivider: {
+    fontSize: 10,
+    color: '#475569',
+    marginHorizontal: 2,
+  },
+  roleTag: {
+    fontSize: 9,
+    fontWeight: typography.weights.bold,
+    color: '#93c5fd',
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  idCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+    paddingTop: 8,
+  },
+  idCardSub: {
+    fontSize: 10,
+    color: '#64748b',
   },
   sectionHeader: {
-    fontSize: typography.sizes.xs,
+    fontSize: 11,
     fontWeight: typography.weights.bold,
-    color: colors.textMuted,
+    color: '#475569',
     textTransform: 'uppercase',
-    marginBottom: spacing.sm,
+    letterSpacing: 0.5,
     marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  menuCard: {
+    padding: 0,
+    borderRadius: 10,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginHorizontal: spacing.md,
   },
   logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: spacing.md,
+  },
+  logoutText: {
+    fontSize: 13,
+    fontWeight: typography.weights.bold,
+    color: '#dc2626',
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 10,
+    color: '#94a3b8',
     marginTop: spacing.lg,
-    borderColor: colors.emergencyLight,
-    backgroundColor: '#fff5f5',
   },
 });

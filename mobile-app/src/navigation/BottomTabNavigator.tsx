@@ -29,17 +29,17 @@ export const BottomTabNavigator: React.FC = () => {
           color: colors.textPrimary,
         },
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.borderLight,
+          backgroundColor: '#ffffff',
+          borderTopColor: '#e2e8f0',
           height: 62,
           paddingBottom: 8,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarActiveTintColor: '#2563eb',
+        tabBarInactiveTintColor: '#64748b',
         tabBarLabelStyle: {
-          fontSize: typography.sizes.xs,
-          fontWeight: typography.weights.medium,
+          fontSize: 11,
+          fontWeight: typography.weights.semibold,
         },
       }}
     >

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { colors, spacing, typography } from '../theme';
 import { Card } from '../components/Card';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button } from '../components/Button';
 import { Room } from '../types';
-import { Users, Wind, Tv, Calendar } from 'lucide-react-native';
+import { Users, Wind, Tv, Calendar, Search, MapPin } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -42,29 +42,58 @@ const MOCK_ROOMS: Room[] = [
     hasAC: true,
     hasProjector: false,
     isOccupied: false,
-    building: { name: 'Science Complex', code: 'SCI', id: 'b2', latitude: 0, longitude: 0, floorCount: 3 },
+    building: { name: 'Marie Curie Science Complex', code: 'SCI', id: 'b2', latitude: 0, longitude: 0, floorCount: 3 },
+  },
+  {
+    id: 'r4',
+    buildingId: 'b2',
+    roomNumber: 'SCI-302',
+    floor: 3,
+    capacity: 45,
+    hasAC: true,
+    hasProjector: true,
+    isOccupied: false,
+    building: { name: 'Marie Curie Science Complex', code: 'SCI', id: 'b2', latitude: 0, longitude: 0, floorCount: 3 },
   },
 ];
 
 export const ClassroomsScreen: React.FC = () => {
   const [filterOccupied, setFilterOccupied] = useState<boolean | null>(null);
+  const [search, setSearch] = useState('');
+  const [selectedBuilding, setSelectedBuilding] = useState<string>('ALL');
+
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const filteredRooms = MOCK_ROOMS.filter(r => {
-    if (filterOccupied === null) return true;
-    return filterOccupied ? r.isOccupied : !r.isOccupied;
+    const matchOccupied = filterOccupied === null ? true : filterOccupied ? r.isOccupied : !r.isOccupied;
+    const matchBuilding = selectedBuilding === 'ALL' || r.building?.code === selectedBuilding;
+    const matchSearch = r.roomNumber.toLowerCase().includes(search.toLowerCase()) ||
+      (r.building?.name || '').toLowerCase().includes(search.toLowerCase());
+    return matchOccupied && matchBuilding && matchSearch;
   });
 
   return (
     <View style={styles.container}>
-      {/* Filter Tabs */}
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Search size={16} color="#94a3b8" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search room (e.g. ENG-101, Lab A)..."
+          value={search}
+          onChangeText={setSearch}
+          placeholderTextColor="#94a3b8"
+        />
+      </View>
+
+      {/* Filter Chips Bar */}
       <View style={styles.filterRow}>
         <TouchableOpacity
           style={[styles.chip, filterOccupied === null && styles.chipActive]}
           onPress={() => setFilterOccupied(null)}
         >
           <Text style={[styles.chipText, filterOccupied === null && styles.chipTextActive]}>
-            All Rooms
+            All ({MOCK_ROOMS.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -72,7 +101,7 @@ export const ClassroomsScreen: React.FC = () => {
           onPress={() => setFilterOccupied(false)}
         >
           <Text style={[styles.chipText, filterOccupied === false && styles.chipTextActive]}>
-            Available Now
+            Vacant Now
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -83,12 +112,29 @@ export const ClassroomsScreen: React.FC = () => {
             In Use
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.chip, selectedBuilding === 'ENG' && styles.chipActive]}
+          onPress={() => setSelectedBuilding(selectedBuilding === 'ENG' ? 'ALL' : 'ENG')}
+        >
+          <Text style={[styles.chipText, selectedBuilding === 'ENG' && styles.chipTextActive]}>
+            ENG Hall
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.chip, selectedBuilding === 'SCI' && styles.chipActive]}
+          onPress={() => setSelectedBuilding(selectedBuilding === 'SCI' ? 'ALL' : 'SCI')}
+        >
+          <Text style={[styles.chipText, selectedBuilding === 'SCI' && styles.chipTextActive]}>
+            Science
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
         data={filteredRooms}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <Card>
             <View style={styles.roomHeader}>
@@ -99,31 +145,36 @@ export const ClassroomsScreen: React.FC = () => {
               <StatusBadge
                 label={item.isOccupied ? 'Occupied' : 'Vacant'}
                 variant={item.isOccupied ? 'warning' : 'success'}
+                dot
               />
             </View>
 
             <View style={styles.detailsRow}>
               <View style={styles.detailItem}>
-                <Users size={16} color={colors.textSecondary} />
+                <Users size={14} color="#64748b" />
                 <Text style={styles.detailText}>{item.capacity} seats</Text>
               </View>
+              <View style={styles.detailItem}>
+                <MapPin size={14} color="#64748b" />
+                <Text style={styles.detailText}>Floor {item.floor}</Text>
+              </View>
               {item.hasAC && (
-                <View style={styles.detailItem}>
-                  <Wind size={16} color={colors.primary} />
-                  <Text style={styles.detailText}>AC</Text>
+                <View style={[styles.detailItem, styles.acItem]}>
+                  <Wind size={14} color="#2563eb" />
+                  <Text style={[styles.detailText, { color: '#1d4ed8' }]}>HVAC 70°F</Text>
                 </View>
               )}
               {item.hasProjector && (
-                <View style={styles.detailItem}>
-                  <Tv size={16} color={colors.pastelPurpleDark} />
-                  <Text style={styles.detailText}>Projector</Text>
+                <View style={[styles.detailItem, styles.avItem]}>
+                  <Tv size={14} color="#7c3aed" />
+                  <Text style={[styles.detailText, { color: '#6d28d9' }]}>AV Projector</Text>
                 </View>
               )}
             </View>
 
             <View style={styles.actionRow}>
               <Button
-                title={item.isOccupied ? 'View Schedule' : 'Book Classroom'}
+                title={item.isOccupied ? 'Check Schedule' : 'Reserve Room'}
                 variant={item.isOccupied ? 'secondary' : 'primary'}
                 size="sm"
                 onPress={() => navigation.navigate('BookRoom', { room: item })}
@@ -139,71 +190,109 @@ export const ClassroomsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f8fafc',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0,
   },
   filterRow: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    overflow: 'scroll',
   },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: spacing.borderRadius.full,
-    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#e2e8f0',
   },
   chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
   },
   chipText: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.semibold,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
   },
   chipTextActive: {
     color: '#ffffff',
   },
   listContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
+    padding: 16,
+    paddingBottom: 110,
   },
   roomHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    marginBottom: 10,
   },
   buildingName: {
-    fontSize: typography.sizes.xs,
-    color: colors.textMuted,
-    fontWeight: typography.weights.medium,
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   roomTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.bold,
-    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 2,
   },
   detailsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  acItem: {
+    backgroundColor: '#eff6ff',
+  },
+  avItem: {
+    backgroundColor: '#faf5ff',
   },
   detailText: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
   },
   actionRow: {
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    paddingTop: spacing.md,
+    borderTopColor: '#f1f5f9',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
 });

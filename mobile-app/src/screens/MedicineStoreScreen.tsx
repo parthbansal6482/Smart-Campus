@@ -5,24 +5,24 @@ import { Card } from '../components/Card';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button } from '../components/Button';
 import { Medicine } from '../types';
-import { Search, Pill, ShoppingCart, Upload } from 'lucide-react-native';
+import { Search, Pill, ShoppingCart, Upload, ShieldCheck, CheckCircle2 } from 'lucide-react-native';
 
 const MOCK_MEDICINES: Medicine[] = [
   {
     id: 'med-1',
-    name: 'Paracetamol 500mg (10 Tabs)',
+    name: 'Paracetamol 500mg (10 Tablets)',
     category: 'PAIN_RELIEF',
     price: 2.5,
-    description: 'Relieves fever and mild to moderate body pain.',
+    description: 'Rapid-action antipyretic for headache, fever, and muscle soreness.',
     stock: 120,
     requiresPrescription: false,
   },
   {
     id: 'med-2',
-    name: 'Sterile First Aid Kit',
+    name: 'Campus Sterile First-Aid Kit',
     category: 'FIRST_AID',
     price: 4.99,
-    description: 'Emergency wound cleaning and waterproof bandaging kit.',
+    description: 'Complete kit: sterile gauze, antiseptic swabs, medical tape, and bandages.',
     stock: 45,
     requiresPrescription: false,
   },
@@ -31,9 +31,27 @@ const MOCK_MEDICINES: Medicine[] = [
     name: 'Amoxicillin Antibiotic 250mg',
     category: 'PRESCRIPTION_ONLY',
     price: 9.5,
-    description: 'Prescription required. Doctor note upload mandatory.',
-    stock: 20,
+    description: 'Broad-spectrum antibiotic. Valid campus doctor prescription mandatory.',
+    stock: 18,
     requiresPrescription: true,
+  },
+  {
+    id: 'med-4',
+    name: 'Cetirizine Antihistamine 10mg',
+    category: 'COLD_FEVER',
+    price: 3.2,
+    description: '24-hour relief from seasonal allergies, pollen sneezes, and hives.',
+    stock: 85,
+    requiresPrescription: false,
+  },
+  {
+    id: 'med-5',
+    name: 'Oral Rehydration Salts (ORS)',
+    category: 'FIRST_AID',
+    price: 1.5,
+    description: 'Electrolyte balance formula for dehydration, sports fatigue, and weakness.',
+    stock: 150,
+    requiresPrescription: false,
   },
 ];
 
@@ -41,11 +59,12 @@ export const MedicineStoreScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('ALL');
 
-  const categories = ['ALL', 'PAIN_RELIEF', 'FIRST_AID', 'PRESCRIPTION_ONLY'];
+  const categories = ['ALL', 'PAIN_RELIEF', 'FIRST_AID', 'COLD_FEVER', 'PRESCRIPTION_ONLY'];
 
   const filteredMeds = MOCK_MEDICINES.filter(m => {
     const matchCat = selectedCat === 'ALL' || m.category === selectedCat;
-    const matchSearch = m.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = m.name.toLowerCase().includes(search.toLowerCase()) ||
+      (m.description || '').toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
@@ -54,10 +73,11 @@ export const MedicineStoreScreen: React.FC = () => {
       {/* Search & Category Header */}
       <View style={styles.header}>
         <View style={styles.searchBar}>
-          <Search size={18} color={colors.textMuted} />
+          <Search size={16} color="#64748b" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search pharmacy medicines..."
+            placeholder="Search generic name, pain relief, bandages..."
+            placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}
           />
@@ -68,18 +88,30 @@ export const MedicineStoreScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           data={categories}
           keyExtractor={item => item}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.catChip, selectedCat === item && styles.catChipActive]}
-              onPress={() => setSelectedCat(item)}
-            >
-              <Text style={[styles.catText, selectedCat === item && styles.catTextActive]}>
-                {item.replace('_', ' ')}
-              </Text>
-            </TouchableOpacity>
-          )}
-          style={{ marginTop: spacing.sm }}
+          renderItem={({ item }) => {
+            const active = selectedCat === item;
+            return (
+              <TouchableOpacity
+                style={[styles.catChip, active && styles.catChipActive]}
+                onPress={() => setSelectedCat(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.catText, active && styles.catTextActive]}>
+                  {item.replace('_', ' ')}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          style={{ marginTop: 8 }}
         />
+      </View>
+
+      {/* Info Pill */}
+      <View style={styles.infoBanner}>
+        <ShieldCheck size={16} color="#047857" />
+        <Text style={styles.infoText}>
+          Campus Pharmacy verified • Free delivery to dorms & academic halls in 30 mins
+        </Text>
       </View>
 
       <FlatList
@@ -87,35 +119,56 @@ export const MedicineStoreScreen: React.FC = () => {
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <Card>
-            <View style={styles.itemRow}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
-                  <StatusBadge label={item.category.replace('_', ' ')} variant="info" />
-                  {item.requiresPrescription && <StatusBadge label="Rx Required" variant="danger" />}
-                </View>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemDesc}>{item.description}</Text>
-                <Text style={styles.itemPrice}>\${item.price.toFixed(2)}</Text>
+          <Card style={styles.medCard}>
+            <View style={styles.itemHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <StatusBadge
+                  label={item.category.replace('_', ' ')}
+                  variant={item.category === 'PRESCRIPTION_ONLY' ? 'warning' : 'info'}
+                />
+                {item.requiresPrescription ? (
+                  <StatusBadge label="Rx Mandatory" variant="danger" />
+                ) : (
+                  <View style={styles.otcBadge}>
+                    <CheckCircle2 size={10} color="#047857" />
+                    <Text style={styles.otcText}>OTC</Text>
+                  </View>
+                )}
               </View>
+              <Text style={[styles.stockText, item.stock < 25 && styles.stockLow]}>
+                {item.stock < 25 ? `Only ${item.stock} left` : `${item.stock} in stock`}
+              </Text>
             </View>
 
+            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={styles.itemDesc}>{item.description}</Text>
+
             <View style={styles.actionRow}>
+              <View>
+                <Text style={styles.priceLabel}>Unit Price</Text>
+                <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+              </View>
+
               {item.requiresPrescription ? (
                 <Button
                   title="Upload Rx & Order"
                   variant="outline"
                   size="sm"
-                  leftIcon={<Upload size={14} color={colors.primary} />}
-                  onPress={() => Alert.alert('Prescription Upload', 'Select prescription image from gallery to attach.')}
+                  leftIcon={<Upload size={13} color="#2563eb" />}
+                  onPress={() =>
+                    Alert.alert(
+                      'Prescription Upload',
+                      'Please photograph your doctor slip. Our licensed pharmacist will verify within 15 minutes.'
+                    )
+                  }
                 />
               ) : (
                 <Button
-                  title="Add to Pharmacy Cart"
+                  title="Add to Pharmacy Order"
                   variant="primary"
                   size="sm"
-                  leftIcon={<ShoppingCart size={14} color="#ffffff" />}
-                  onPress={() => Alert.alert('Added to Cart', `${item.name} added to pharmacy order.`)}
+                  leftIcon={<ShoppingCart size={13} color="#ffffff" />}
+                  onPress={() => Alert.alert('Added', `${item.name} added to pharmacy cart.`)}
                 />
               )}
             </View>
@@ -129,21 +182,23 @@ export const MedicineStoreScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f8fafc',
   },
   header: {
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: '#e2e8f0',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.borderRadius.md,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
     paddingHorizontal: spacing.md,
     height: 40,
   },
@@ -151,55 +206,122 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: spacing.sm,
     fontSize: typography.sizes.sm,
-    color: colors.textPrimary,
+    color: '#0f172a',
   },
   catChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: spacing.borderRadius.full,
-    backgroundColor: colors.background,
-    marginRight: spacing.xs,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    marginRight: 6,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#e2e8f0',
   },
   catChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
   },
   catText: {
-    fontSize: typography.sizes.xs,
+    fontSize: 11,
     fontWeight: typography.weights.semibold,
-    color: colors.textSecondary,
+    color: '#475569',
   },
   catTextActive: {
     color: '#ffffff',
   },
-  listContent: {
-    padding: spacing.lg,
-  },
-  itemRow: {
+  infoBanner: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#065f46',
+    fontWeight: typography.weights.medium,
+    lineHeight: 15,
+  },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: 100,
+  },
+  medCard: {
+    padding: spacing.md,
+    borderRadius: 10,
+    borderColor: '#e2e8f0',
+    marginBottom: spacing.sm,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  otcBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  otcText: {
+    fontSize: 10,
+    fontWeight: typography.weights.bold,
+    color: '#047857',
+  },
+  stockText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: typography.weights.medium,
+    fontVariant: ['tabular-nums'],
+  },
+  stockLow: {
+    color: '#dc2626',
+    fontWeight: typography.weights.bold,
   },
   itemName: {
-    fontSize: typography.sizes.md,
+    fontSize: 15,
     fontWeight: typography.weights.bold,
-    color: colors.textPrimary,
+    color: '#0f172a',
   },
   itemDesc: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  itemPrice: {
-    fontSize: typography.sizes.md,
-    fontWeight: typography.weights.bold,
-    color: colors.primary,
-    marginTop: spacing.xs,
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 3,
+    lineHeight: 16,
   },
   actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: '#f1f5f9',
+  },
+  priceLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    fontWeight: typography.weights.semibold,
+  },
+  itemPrice: {
+    fontSize: 16,
+    fontWeight: typography.weights.bold,
+    color: '#0f172a',
+    fontVariant: ['tabular-nums'],
   },
 });
