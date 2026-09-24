@@ -1,22 +1,17 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ScrollView,
-} from 'react-native';
-import { colors, spacing, typography } from '../theme';
-import { Button } from '../components/Button';
-import { useAuthStore } from '../store/authStore';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { ChevronLeft } from 'lucide-react-native';
+import { useAuthStore } from '../store/authStore';
+import { AppText } from '../components/AppText';
+import { Button } from '../components/Button';
+import { Field } from '../components/Field';
+import { colors, fonts, spacing } from '../theme';
 
 export const SignupScreen: React.FC = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { register, isLoading } = useAuthStore();
 
   const [name, setName] = useState('');
@@ -26,80 +21,77 @@ export const SignupScreen: React.FC = () => {
 
   const handleSignup = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Missing Fields', 'Please fill in all required fields.');
+      Alert.alert('Almost there', 'Your name, email and a password are required.');
       return;
     }
-
     try {
-      await register({ name, email, password, phone });
+      await register({ name: name.trim(), email: email.trim(), password, phone: phone.trim() || undefined });
     } catch (err: any) {
-      Alert.alert('Registration Failed', err.response?.data?.message || 'Could not register account.');
+      Alert.alert('Couldn’t create your account', err.response?.data?.message || 'Please try again in a moment.');
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Join Smart Campus</Text>
-          <Text style={styles.subtitle}>Create your student or faculty account</Text>
-        </View>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Pressable
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Back to sign in"
+          hitSlop={12}
+          style={styles.back}
+        >
+          <ChevronLeft size={24} color={colors.ink} />
+        </Pressable>
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Jane Doe"
-            value={name}
-            onChangeText={setName}
-          />
+        <AppText variant="display">Create account</AppText>
+        <AppText variant="callout" tone="ink3" style={styles.lede}>
+          For students and faculty. Staff accounts are set up by the campus administrator.
+        </AppText>
 
-          <Text style={styles.label}>Campus Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="jane@smartcampus.edu"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+        <Field label="Full name" value={name} onChangeText={setName} placeholder="Jane Doe" textContentType="name" />
+        <Field
+          label="Campus email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="jane@smartcampus.edu"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+        />
+        <Field
+          label="Phone"
+          value={phone}
+          onChangeText={setPhone}
+          placeholder="+91 98765 43210"
+          keyboardType="phone-pad"
+          textContentType="telephoneNumber"
+          hint="Optional. Responders use it to reach you during an emergency."
+        />
+        <Field
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="At least 6 characters"
+          secureTextEntry
+          textContentType="newPassword"
+        />
 
-          <Text style={styles.label}>Phone Number (For Emergency Alerts)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="+1-555-0199"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-          />
+        <Button title="Create account" onPress={handleSignup} isLoading={isLoading} style={styles.submit} />
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <Button
-            title="Create Account"
-            onPress={handleSignup}
-            isLoading={isLoading}
-            style={{ marginTop: spacing.lg }}
-          />
-
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.loginLink}
-          >
-            <Text style={styles.loginText}>
-              Already registered? <Text style={styles.loginHighlight}>Sign In</Text>
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.footer}>
+          <AppText variant="callout" tone="ink3">
+            Already have an account?{' '}
+          </AppText>
+          <Pressable onPress={() => navigation.goBack()} accessibilityRole="link" hitSlop={8}>
+            <AppText variant="callout" style={styles.link}>
+              Sign in
+            </AppText>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -107,66 +99,11 @@ export const SignupScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    padding: spacing.xl,
-    justifyContent: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginVertical: spacing.xl,
-  },
-  title: {
-    fontSize: typography.sizes.xxl,
-    fontWeight: typography.weights.bold,
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  form: {
-    backgroundColor: colors.surface,
-    padding: spacing.xl,
-    borderRadius: spacing.borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  label: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.semibold,
-    color: colors.textPrimary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.borderRadius.md,
-    padding: spacing.md,
-    fontSize: typography.sizes.md,
-    color: colors.textPrimary,
-  },
-  loginLink: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  loginText: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-  },
-  loginHighlight: {
-    color: colors.primary,
-    fontWeight: typography.weights.bold,
-  },
+  flex: { flex: 1, backgroundColor: colors.canvas },
+  content: { paddingHorizontal: spacing.xxl },
+  back: { width: 40, height: 40, justifyContent: 'center', marginLeft: -8, marginBottom: spacing.xl },
+  lede: { marginTop: spacing.sm, marginBottom: spacing.xxxl },
+  submit: { marginTop: spacing.sm },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xxl },
+  link: { fontFamily: fonts.semibold, textDecorationLine: 'underline' },
 });

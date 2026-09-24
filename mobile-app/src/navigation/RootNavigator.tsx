@@ -1,5 +1,4 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { AuthNavigator } from './AuthNavigator';
@@ -10,10 +9,10 @@ import { MedicineStoreScreen } from '../screens/MedicineStoreScreen';
 import { TalkToStaffScreen } from '../screens/TalkToStaffScreen';
 import { MedicalCenterInfoScreen } from '../screens/MedicalCenterInfoScreen';
 import { MenuDetailScreen } from '../screens/MenuDetailScreen';
+import { CartScreen } from '../screens/CartScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
-import { EmergencyFab } from '../components/EmergencyFab';
 import { useAuthStore } from '../store/authStore';
-import { colors, typography } from '../theme';
+import { colors, fonts } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -21,78 +20,35 @@ export const RootNavigator: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
 
   return (
-    <View style={styles.container}>
-      <Stack.Navigator
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTitleStyle: { fontWeight: typography.weights.bold },
-          headerTintColor: colors.textPrimary,
-        }}
-      >
-        {!isAuthenticated ? (
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.canvas },
+        headerShadowVisible: false,
+        headerTitleStyle: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ink },
+        headerTintColor: colors.ink,
+        headerBackTitleVisible: false,
+        contentStyle: { backgroundColor: colors.canvas },
+      }}
+    >
+      {!isAuthenticated ? (
+        <Stack.Screen name="Auth" component={AuthNavigator} options={{ headerShown: false }} />
+      ) : (
+        <>
+          <Stack.Screen name="Main" component={BottomTabNavigator} options={{ headerShown: false }} />
+          <Stack.Screen name="BookRoom" component={BookRoomScreen} options={{ title: 'Book a room' }} />
+          <Stack.Screen name="MedicineStore" component={MedicineStoreScreen} options={{ title: 'Pharmacy' }} />
+          <Stack.Screen name="TalkToStaff" component={TalkToStaffScreen} options={{ title: 'Talk to a nurse' }} />
+          <Stack.Screen name="MedicalCenterInfo" component={MedicalCenterInfoScreen} options={{ title: 'Medical centre' }} />
+          <Stack.Screen name="MenuDetail" component={MenuDetailScreen} options={{ title: '' }} />
+          <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Your order' }} />
+          <Stack.Screen name="Orders" component={OrdersScreen} options={{ title: 'Orders' }} />
           <Stack.Screen
-            name="Auth"
-            component={AuthNavigator}
-            options={{ headerShown: false }}
+            name="EmergencyModal"
+            component={EmergencyScreen}
+            options={{ presentation: 'fullScreenModal', headerShown: false }}
           />
-        ) : (
-          <>
-            <Stack.Screen
-              name="Main"
-              component={BottomTabNavigator}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="BookRoom"
-              component={BookRoomScreen}
-              options={{ title: 'Reserve Classroom' }}
-            />
-            <Stack.Screen
-              name="MedicineStore"
-              component={MedicineStoreScreen}
-              options={{ title: 'Campus Pharmacy Store' }}
-            />
-            <Stack.Screen
-              name="TalkToStaff"
-              component={TalkToStaffScreen}
-              options={{ title: 'Talk to Medical Staff' }}
-            />
-            <Stack.Screen
-              name="MedicalCenterInfo"
-              component={MedicalCenterInfoScreen}
-              options={{ title: 'Medical Center Info' }}
-            />
-            <Stack.Screen
-              name="MenuDetail"
-              component={MenuDetailScreen}
-              options={{ title: 'Customize Food Item' }}
-            />
-            <Stack.Screen
-              name="Orders"
-              component={OrdersScreen}
-              options={{ title: 'My Food Orders' }}
-            />
-            <Stack.Screen
-              name="EmergencyModal"
-              component={EmergencyScreen}
-              options={{
-                presentation: 'fullScreenModal',
-                headerShown: false,
-              }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
-
-      {/* Floating Emergency SOS button accessible across screens */}
-      {isAuthenticated && <EmergencyFab />}
-    </View>
+        </>
+      )}
+    </Stack.Navigator>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-});

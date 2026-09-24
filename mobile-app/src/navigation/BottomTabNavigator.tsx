@@ -1,93 +1,92 @@
 import React from 'react';
+import { StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Home, DoorOpen, HeartPulse, UtensilsCrossed, CircleUser } from 'lucide-react-native';
 import { MainTabParamList } from '../types';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ClassroomsScreen } from '../screens/ClassroomsScreen';
 import { MedicalHelpScreen } from '../screens/MedicalHelpScreen';
 import { CafeteriaScreen } from '../screens/CafeteriaScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
-import { colors, typography } from '../theme';
-import { Home, GraduationCap, HeartPulse, UtensilsCrossed, User } from 'lucide-react-native';
+import { EmergencyFab } from '../components/EmergencyFab';
+import { colors, fonts } from '../theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+const TAB_BAR_HEIGHT = 56;
+
 export const BottomTabNavigator: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 8);
+
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: colors.surface,
-          elevation: 0,
-          shadowOpacity: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.borderLight,
-        },
-        headerTitleStyle: {
-          fontWeight: typography.weights.bold,
-          fontSize: typography.sizes.lg,
-          color: colors.textPrimary,
-        },
-        tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopColor: '#e2e8f0',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 8,
-        },
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: typography.weights.semibold,
-        },
-      }}
-    >
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeScreen}
-        options={{
-          title: 'Campus Feed',
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+    <View style={styles.container}>
+      <Tab.Navigator
+        sceneContainerStyle={{ backgroundColor: colors.canvas }}
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: colors.ink,
+          tabBarInactiveTintColor: colors.ink4,
+          tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11, marginTop: -2 },
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.line,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            height: TAB_BAR_HEIGHT + bottomInset,
+            paddingTop: 6,
+            paddingBottom: bottomInset,
+            elevation: 0,
+          },
         }}
-      />
-      <Tab.Screen
-        name="ClassroomsTab"
-        component={ClassroomsScreen}
-        options={{
-          title: 'Classrooms & Labs',
-          tabBarLabel: 'Classrooms',
-          tabBarIcon: ({ color, size }) => <GraduationCap color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen
-        name="MedicalHelpTab"
-        component={MedicalHelpScreen}
-        options={{
-          title: 'Medical Help',
-          tabBarLabel: 'Medical',
-          tabBarIcon: ({ color, size }) => <HeartPulse color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen
-        name="CafeteriaTab"
-        component={CafeteriaScreen}
-        options={{
-          title: 'Campus Cafeteria',
-          tabBarLabel: 'Cafeteria',
-          tabBarIcon: ({ color, size }) => <UtensilsCrossed color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen
-        name="ProfileTab"
-        component={ProfileScreen}
-        options={{
-          title: 'My Profile',
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
-        }}
-      />
-    </Tab.Navigator>
+      >
+        <Tab.Screen
+          name="HomeTab"
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'Home',
+            tabBarIcon: ({ color }) => <Home color={color} size={22} strokeWidth={1.75} />,
+          }}
+        />
+        <Tab.Screen
+          name="ClassroomsTab"
+          component={ClassroomsScreen}
+          options={{
+            tabBarLabel: 'Rooms',
+            tabBarIcon: ({ color }) => <DoorOpen color={color} size={22} strokeWidth={1.75} />,
+          }}
+        />
+        <Tab.Screen
+          name="MedicalHelpTab"
+          component={MedicalHelpScreen}
+          options={{
+            tabBarLabel: 'Health',
+            tabBarIcon: ({ color }) => <HeartPulse color={color} size={22} strokeWidth={1.75} />,
+          }}
+        />
+        <Tab.Screen
+          name="CafeteriaTab"
+          component={CafeteriaScreen}
+          options={{
+            tabBarLabel: 'Food',
+            tabBarIcon: ({ color }) => <UtensilsCrossed color={color} size={22} strokeWidth={1.75} />,
+          }}
+        />
+        <Tab.Screen
+          name="ProfileTab"
+          component={ProfileScreen}
+          options={{
+            tabBarLabel: 'Profile',
+            tabBarIcon: ({ color }) => <CircleUser color={color} size={22} strokeWidth={1.75} />,
+          }}
+        />
+      </Tab.Navigator>
+
+      <EmergencyFab bottom={TAB_BAR_HEIGHT + bottomInset + 16} />
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.canvas },
+});
