@@ -1,53 +1,40 @@
 import React from 'react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '../../lib/utils';
 
-export const Table: React.FC<React.TableHTMLAttributes<HTMLTableElement>> = ({ children, className, ...props }) => {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table className={twMerge(clsx('w-full text-left text-xs text-slate-700', className))} {...props}>
-        {children}
-      </table>
-    </div>
-  );
-};
-
-export const TableHead: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ children, className, ...props }) => {
-  return (
-    <thead className={twMerge(clsx('bg-slate-50/90 text-[11px] uppercase font-bold text-slate-500 tracking-wider border-b border-slate-200/80', className))} {...props}>
+export const Table: React.FC<React.TableHTMLAttributes<HTMLTableElement>> = ({ children, className, ...props }) => (
+  <div className="w-full overflow-x-auto">
+    <table className={cn('w-full text-left text-[13px]', className)} {...props}>
       {children}
-    </thead>
-  );
-};
+    </table>
+  </div>
+);
 
-export const TableBody: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ children, className, ...props }) => {
-  return (
-    <tbody className={twMerge(clsx('divide-y divide-slate-100 bg-white', className))} {...props}>
-      {children}
-    </tbody>
-  );
-};
+export const THead: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ children, className, ...props }) => (
+  <thead className={cn('border-y border-line bg-canvas/60', className)} {...props}>
+    {children}
+  </thead>
+);
 
-export const TableRow: React.FC<React.HTMLAttributes<HTMLTableRowElement>> = ({ children, className, ...props }) => {
-  return (
-    <tr className={twMerge(clsx('hover:bg-slate-50/80 transition-colors', className))} {...props}>
-      {children}
-    </tr>
-  );
-};
+export const TBody: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ children, className, ...props }) => (
+  <tbody className={cn('divide-y divide-line', className)} {...props}>
+    {children}
+  </tbody>
+);
 
-export const TableHeaderCell: React.FC<React.ThHTMLAttributes<HTMLTableCellElement>> = ({ children, className, ...props }) => {
-  return (
-    <th className={twMerge(clsx('px-5 py-3', className))} {...props}>
-      {children}
-    </th>
-  );
-};
+export const TR: React.FC<React.HTMLAttributes<HTMLTableRowElement>> = ({ children, className, ...props }) => (
+  <tr className={cn('transition-colors hover:bg-canvas/70', className)} {...props}>
+    {children}
+  </tr>
+);
 
-export const TableCell: React.FC<React.TdHTMLAttributes<HTMLTableCellElement>> = ({ children, className, ...props }) => {
-  return (
-    <td className={twMerge(clsx('px-5 py-3.5 whitespace-nowrap text-xs text-slate-800', className))} {...props}>
-      {children}
-    </td>
-  );
-};
+export const TH: React.FC<React.ThHTMLAttributes<HTMLTableCellElement>> = ({ children, className, ...props }) => (
+  <th className={cn('px-5 h-10 text-xs font-medium text-ink-3 whitespace-nowrap', className)} {...props}>
+    {children}
+  </th>
+);
+
+export const TD: React.FC<React.TdHTMLAttributes<HTMLTableCellElement>> = ({ children, className, ...props }) => (
+  <td className={cn('px-5 py-3.5 text-ink-2 align-middle', className)} {...props}>
+    {children}
+  </td>
+);

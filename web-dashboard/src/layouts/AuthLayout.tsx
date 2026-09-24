@@ -1,28 +1,44 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
+import { Brand } from '../components/common/Sidebar';
 
-export const AuthLayout: React.FC = () => {
-  return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background Ambient Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center relative z-10">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20 mb-3 border border-blue-500/30">
-          <ShieldAlert className="w-6 h-6" />
-        </div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">Smart Campus Command</h2>
-        <p className="mt-1 text-xs text-slate-400">
-          Authorized staff, faculty, and emergency responder operations portal
+export const AuthLayout: React.FC = () => (
+  <div className="min-h-screen bg-canvas grid lg:grid-cols-[1.1fr_1fr]">
+    {/* Editorial panel */}
+    <section className="hidden lg:flex flex-col justify-between p-12 border-r border-line">
+      <Brand />
+      <div className="max-w-md">
+        <p className="font-serif text-[56px] leading-[1.02] text-ink">
+          Campus operations,
+          <br />
+          <span className="italic text-ink-3">quietly handled.</span>
+        </p>
+        <p className="text-sm text-ink-3 mt-6 leading-relaxed max-w-sm">
+          Classrooms, medical response and the cafeteria in one place, for the people who keep the campus running.
         </p>
       </div>
+      <dl className="grid grid-cols-3 gap-6 max-w-md text-[13px]">
+        {[
+          ['Classrooms', 'Bookings & facilities'],
+          ['Medical', 'Emergency dispatch'],
+          ['Cafeteria', 'Orders & menu'],
+        ].map(([title, text]) => (
+          <div key={title} className="border-t border-line pt-3">
+            <dt className="text-ink font-medium">{title}</dt>
+            <dd className="text-ink-3 mt-0.5">{text}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="bg-slate-900/90 backdrop-blur-md py-8 px-6 border border-slate-800 rounded-2xl shadow-xl sm:px-9 text-slate-200">
-          <Outlet />
-        </div>
+    {/* Form panel */}
+    <section className="flex flex-col justify-center px-6 py-12 sm:px-12 bg-surface">
+      <div className="lg:hidden mb-10">
+        <Brand />
       </div>
-    </div>
-  );
-};
+      <div className="w-full max-w-sm mx-auto lg:mx-0 lg:ml-12">
+        <Outlet />
+      </div>
+    </section>
+  </div>
+);
