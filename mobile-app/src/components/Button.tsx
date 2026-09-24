@@ -1,130 +1,84 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-  StyleProp,
-} from 'react-native';
-import { colors, spacing, typography } from '../theme';
+import { ActivityIndicator, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { colors, radius } from '../theme';
+import { AppText } from './AppText';
+
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Size = 'md' | 'lg';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'emergency' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: Variant;
+  size?: Size;
   isLoading?: boolean;
   disabled?: boolean;
+  icon?: React.ReactNode;
+  trailing?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  textStyle?: StyleProp<TextStyle>;
-  leftIcon?: React.ReactNode;
 }
+
+const palette: Record<Variant, { bg: string; pressed: string; fg: 'onInk' | 'ink' | 'ink2'; border?: string }> = {
+  primary: { bg: colors.ink, pressed: '#33312D', fg: 'onInk' },
+  secondary: { bg: colors.surface, pressed: colors.sunken, fg: 'ink', border: colors.lineStrong },
+  ghost: { bg: 'transparent', pressed: colors.sunken, fg: 'ink2' },
+  danger: { bg: colors.critical, pressed: colors.criticalPressed, fg: 'onInk' },
+};
 
 export const Button: React.FC<ButtonProps> = ({
   title,
   onPress,
   variant = 'primary',
-  size = 'md',
-  isLoading = false,
-  disabled = false,
+  size = 'lg',
+  isLoading,
+  disabled,
+  icon,
+  trailing,
   style,
-  textStyle,
-  leftIcon,
 }) => {
-  const getBackgroundColor = () => {
-    if (disabled) return colors.border;
-    switch (variant) {
-      case 'primary':
-        return colors.primary;
-      case 'emergency':
-        return colors.emergency;
-      case 'secondary':
-        return colors.primaryLight;
-      case 'outline':
-      case 'ghost':
-        return 'transparent';
-      default:
-        return colors.primary;
-    }
-  };
-
-  const getTextColor = () => {
-    if (disabled) return colors.textMuted;
-    switch (variant) {
-      case 'primary':
-      case 'emergency':
-        return colors.textLight;
-      case 'secondary':
-        return colors.primary;
-      case 'outline':
-      case 'ghost':
-        return colors.textPrimary;
-      default:
-        return colors.textLight;
-    }
-  };
-
-  const getPadding = () => {
-    switch (size) {
-      case 'sm':
-        return { paddingVertical: spacing.xs + 2, paddingHorizontal: spacing.md };
-      case 'lg':
-        return { paddingVertical: spacing.lg, paddingHorizontal: spacing.xl };
-      default:
-        return { paddingVertical: spacing.md, paddingHorizontal: spacing.lg };
-    }
-  };
+  const p = palette[variant];
+  const inactive = disabled || isLoading;
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      disabled={disabled || isLoading}
-      activeOpacity={0.8}
-      style={[
+      disabled={inactive}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!inactive, busy: !!isLoading }}
+      style={({ pressed }) => [
         styles.base,
-        {
-          backgroundColor: getBackgroundColor(),
-          ...getPadding(),
-          borderWidth: variant === 'outline' ? 1 : 0,
-          borderColor: variant === 'outline' ? colors.border : undefined,
-        },
+        size === 'lg' ? styles.lg : styles.md,
+        { backgroundColor: pressed ? p.pressed : p.bg },
+        p.border && { borderWidth: 1, borderColor: p.border },
+        inactive && !isLoading && styles.disabled,
         style,
       ]}
     >
       {isLoading ? (
-        <ActivityIndicator color={getTextColor()} size="small" />
+        <ActivityIndicator color={p.fg === 'onInk' ? colors.onInk : colors.ink} />
       ) : (
-        <>
-          {leftIcon}
-          <Text
-            style={[
-              styles.text,
-              {
-                color: getTextColor(),
-                fontSize: size === 'sm' ? typography.sizes.sm : typography.sizes.md,
-                marginLeft: leftIcon ? spacing.sm : 0,
-              },
-              textStyle,
-            ]}
-          >
+        <View style={styles.content}>
+          {icon}
+          <AppText variant="label" tone={p.fg} style={size === 'lg' && styles.lgText}>
             {title}
-          </Text>
-        </>
+          </AppText>
+          {trailing}
+        </View>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: spacing.borderRadius.md,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
+    paddingHorizontal: 18,
   },
-  text: {
-    fontWeight: typography.weights.semibold,
-  },
+  lg: { minHeight: 52 },
+  md: { minHeight: 40, paddingHorizontal: 14, borderRadius: radius.sm + 2 },
+  lgText: { fontSize: 15 },
+  content: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  disabled: { opacity: 0.45 },
 });

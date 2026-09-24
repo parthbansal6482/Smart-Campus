@@ -1,58 +1,52 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, View, Text } from 'react-native';
-import { colors, spacing, typography } from '../theme';
-import { AlertCircle } from 'lucide-react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { colors, fonts, radius } from '../theme';
 import { RootStackParamList } from '../types';
+import { AppText } from './AppText';
 
-export const EmergencyFab: React.FC = () => {
+/** Always-available SOS button, sitting just above the tab bar in the thumb zone. */
+export const EmergencyFab: React.FC<{ bottom: number }> = ({ bottom }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
+    <Pressable
       onPress={() => navigation.navigate('EmergencyModal')}
-      style={styles.fab}
+      accessibilityRole="button"
+      accessibilityLabel="Emergency SOS"
+      accessibilityHint="Opens the emergency screen to request medical help"
+      style={({ pressed }) => [
+        styles.fab,
+        { bottom },
+        pressed && { backgroundColor: colors.criticalPressed },
+      ]}
     >
-      <View style={styles.pulseContainer}>
-        <AlertCircle color="#ffffff" size={24} strokeWidth={2.5} />
-        <Text style={styles.text}>SOS</Text>
-      </View>
-    </TouchableOpacity>
+      <AppText variant="label" tone="onInk" style={styles.text}>
+        SOS
+      </AppText>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 85,
     right: 20,
-    backgroundColor: colors.emergency,
-    borderRadius: spacing.borderRadius.full,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
+    width: 60,
+    height: 60,
+    borderRadius: radius.full,
+    backgroundColor: colors.critical,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.emergency,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    zIndex: 999,
+    borderWidth: 3,
+    borderColor: colors.canvas,
+    shadowColor: '#1A1917',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 6,
+    zIndex: 50,
   },
-  pulseContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  text: {
-    color: '#ffffff',
-    fontWeight: typography.weights.bold,
-    fontSize: typography.sizes.sm,
-    letterSpacing: 0.5,
-  },
+  text: { fontFamily: fonts.semibold, fontSize: 15, letterSpacing: 1 },
 });

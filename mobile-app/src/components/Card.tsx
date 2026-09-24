@@ -1,28 +1,38 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import { colors, spacing } from '../theme';
+import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { colors, radius, spacing } from '../theme';
 
 interface CardProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  onPress?: () => void;
+  padded?: boolean;
+  accessibilityLabel?: string;
 }
 
-export const Card: React.FC<CardProps> = ({ children, style }) => {
-  return <View style={[styles.card, style]}>{children}</View>;
+export const Card: React.FC<CardProps> = ({ children, style, onPress, padded = true, accessibilityLabel }) => {
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        style={({ pressed }) => [styles.card, padded && styles.padded, pressed && styles.pressed, style]}
+      >
+        {children}
+      </Pressable>
+    );
+  }
+  return <View style={[styles.card, padded && styles.padded, style]}>{children}</View>;
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surfaceCard,
-    borderRadius: spacing.borderRadius.lg,
-    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.borderLight,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: spacing.md,
+    borderColor: colors.line,
   },
+  padded: { padding: spacing.lg },
+  pressed: { backgroundColor: colors.canvas },
 });

@@ -162,7 +162,7 @@ export type RootStackParamList = {
   MenuDetail: { item: MenuItem };
   Cart: undefined;
   OrderTrack: { order?: Order };
-  Orders: undefined;
+  Orders: { placedOrderId?: string } | undefined;
 };
 
 export type MainTabParamList = {

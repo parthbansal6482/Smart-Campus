@@ -1,85 +1,82 @@
 import React from 'react';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../theme';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
+import { colors, spacing } from '../theme';
+import { AppText } from './AppText';
 
 interface ListItemProps {
   title: string;
   subtitle?: string;
-  leftIcon?: React.ReactNode;
-  rightElement?: React.ReactNode;
+  icon?: React.ReactNode;
+  trailing?: React.ReactNode;
   onPress?: () => void;
-  showChevron?: boolean;
+  last?: boolean;
 }
 
-export const ListItem: React.FC<ListItemProps> = ({
-  title,
-  subtitle,
-  leftIcon,
-  rightElement,
-  onPress,
-  showChevron = true,
-}) => {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={!onPress}
-      activeOpacity={0.7}
-      style={styles.container}
-    >
-      <View style={styles.left}>
-        {leftIcon && <View style={styles.iconWrapper}>{leftIcon}</View>}
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-        </View>
-      </View>
-
-      <View style={styles.right}>
-        {rightElement}
-        {showChevron && onPress && (
-          <ChevronRight size={18} color={colors.textMuted} style={styles.chevron} />
+/** A row inside a grouped list. Hairline dividers, 56pt minimum touch height. */
+export const ListItem: React.FC<ListItemProps> = ({ title, subtitle, icon, trailing, onPress, last }) => (
+  <Pressable
+    onPress={onPress}
+    disabled={!onPress}
+    accessibilityRole={onPress ? 'button' : undefined}
+    style={({ pressed }) => [styles.row, pressed && onPress && styles.pressed]}
+  >
+    {icon && <View style={styles.icon}>{icon}</View>}
+    <View style={[styles.body, !last && styles.divider]}>
+      <View style={styles.text}>
+        <AppText variant="bodyMedium">{title}</AppText>
+        {subtitle && (
+          <AppText variant="caption" tone="ink3" style={styles.subtitle}>
+            {subtitle}
+          </AppText>
         )}
       </View>
-    </TouchableOpacity>
-  );
-};
+      {trailing}
+      {onPress && !trailing && <ChevronRight size={18} color={colors.ink4} />}
+    </View>
+  </Pressable>
+);
+
+export const ListGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <View style={styles.group}>{children}</View>
+);
 
 const styles = StyleSheet.create({
-  container: {
+  group: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    paddingLeft: spacing.lg,
+    minHeight: 56,
   },
-  left: {
-    flexDirection: 'row',
+  pressed: { backgroundColor: colors.canvas },
+  icon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.sunken,
     alignItems: 'center',
-    flex: 1,
-  },
-  iconWrapper: {
+    justifyContent: 'center',
     marginRight: spacing.md,
   },
-  textContainer: {
+  body: {
     flex: 1,
-  },
-  title: {
-    fontSize: typography.sizes.md,
-    fontWeight: typography.weights.medium,
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  right: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 14,
+    paddingRight: spacing.lg,
   },
-  chevron: {
-    marginLeft: spacing.xs,
+  divider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.lineStrong,
   },
+  text: { flex: 1 },
+  subtitle: { marginTop: 2 },
 });
