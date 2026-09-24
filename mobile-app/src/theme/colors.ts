@@ -1,43 +1,43 @@
+/**
+ * Warm paper neutrals with ink, shared with the web dashboard.
+ * Semantic tones are used only to convey state — never as decoration.
+ */
 export const colors = {
-  // Brand / Primary
-  primary: '#2563eb', // Friendly royal blue
-  primaryLight: '#eff6ff',
-  primaryDark: '#1d4ed8',
+  canvas: '#F7F6F3',
+  surface: '#FFFFFF',
+  sunken: '#F1EFEA',
+  line: '#E7E4DD',
+  lineStrong: '#D5D1C7',
 
-  // Emergency Alert (High visibility warm red/orange)
-  emergency: '#ef4444',
-  emergencyDark: '#dc2626',
-  emergencyLight: '#fee2e2',
-  emergencyAccent: '#f97316',
+  ink: '#1A1917',
+  ink2: '#4A4741',
+  ink3: '#6F6B62',
+  ink4: '#A19D93',
+  onInk: '#FFFFFF',
 
-  // Student-friendly pastels
-  pastelMint: '#d1fae5',
-  pastelMintDark: '#065f46',
-  pastelPurple: '#ede9fe',
-  pastelPurpleDark: '#5b21b6',
-  pastelAmber: '#fef3c7',
-  pastelAmberDark: '#92400e',
-  pastelBlue: '#e0f2fe',
-  pastelBlueDark: '#075985',
+  critical: '#B42318',
+  criticalPressed: '#9A1E14',
+  criticalSoft: '#FBEEEC',
+  criticalLine: '#F2CDC8',
 
-  // Backgrounds & Neutrals
-  background: '#f8fafc',
-  surface: '#ffffff',
-  surfaceCard: '#ffffff',
-  border: '#e2e8f0',
-  borderLight: '#f1f5f9',
+  warn: '#8A5A0B',
+  warnSoft: '#FAF3E3',
 
-  // Text
-  textPrimary: '#0f172a',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
-  textLight: '#ffffff',
+  ok: '#2E6A4F',
+  okSoft: '#ECF3EE',
 
-  // Status
-  success: '#10b981',
-  successLight: '#ecfdf5',
-  warning: '#f59e0b',
-  warningLight: '#fffbeb',
-  danger: '#ef4444',
-  dangerLight: '#fef2f2',
+  info: '#2F4F7F',
+  infoSoft: '#EEF2F7',
+
+  scrim: 'rgba(26, 25, 23, 0.35)',
+};
+
+export type Tone = 'neutral' | 'ok' | 'warn' | 'critical' | 'info';
+
+export const toneColors: Record<Tone, { fg: string; bg: string }> = {
+  neutral: { fg: colors.ink2, bg: colors.sunken },
+  ok: { fg: colors.ok, bg: colors.okSoft },
+  warn: { fg: colors.warn, bg: colors.warnSoft },
+  critical: { fg: colors.critical, bg: colors.criticalSoft },
+  info: { fg: colors.info, bg: colors.infoSoft },
 };

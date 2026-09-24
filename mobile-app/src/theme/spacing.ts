@@ -3,13 +3,16 @@ export const spacing = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24,
-  xxl: 32,
-  borderRadius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-    full: 9999,
-  },
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+  screen: 20,
+};
+
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  full: 9999,
 };

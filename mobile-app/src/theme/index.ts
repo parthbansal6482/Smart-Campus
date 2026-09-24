@@ -1,11 +1,5 @@
-import { colors } from './colors';
-import { typography } from './typography';
-import { spacing } from './spacing';
-
-export const theme = {
-  colors,
-  typography,
-  spacing,
-};
-
-export { colors, typography, spacing };
+export { colors, toneColors } from './colors';
+export type { Tone } from './colors';
+export { fonts, type } from './typography';
+export type { TypeVariant } from './typography';
+export { spacing, radius } from './spacing';
