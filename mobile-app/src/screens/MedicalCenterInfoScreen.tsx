@@ -1,85 +1,54 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { colors, spacing, typography } from '../theme';
-import { Card } from '../components/Card';
-import { ListItem } from '../components/ListItem';
-import { Clock, MapPin, Phone, UserCheck, ShieldCheck } from 'lucide-react-native';
+import { Linking, StyleSheet } from 'react-native';
+import { Clock, MapPin, Phone, Stethoscope, Ambulance } from 'lucide-react-native';
+import { CAMPUS } from '../data/mock';
+import { AppText } from '../components/AppText';
+import { ListGroup, ListItem } from '../components/ListItem';
+import { Screen, SectionLabel } from '../components/Screen';
+import { StatusBadge } from '../components/StatusBadge';
+import { colors, spacing } from '../theme';
 
-export const MedicalCenterInfoScreen: React.FC = () => {
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Card>
-        <Text style={styles.title}>Campus Medical Center & Infirmary</Text>
-        <Text style={styles.subtitle}>
-          24/7 emergency response & daily primary healthcare services for all campus members.
-        </Text>
-      </Card>
+const icon = (Icon: typeof Clock) => <Icon size={18} color={colors.ink} strokeWidth={1.75} />;
 
-      <Text style={styles.sectionHeader}>Hours & Location</Text>
-      <Card>
-        <ListItem
-          title="Operating Hours"
-          subtitle="Open 24 Hours • 7 Days a week"
-          leftIcon={<Clock size={20} color={colors.primary} />}
-          showChevron={false}
-        />
-        <ListItem
-          title="Campus Location"
-          subtitle="Ground Floor, Health Block (Adjacent to Student Center)"
-          leftIcon={<MapPin size={20} color={colors.emergency} />}
-          showChevron={false}
-        />
-        <ListItem
-          title="Direct Phone Line"
-          subtitle="+1-555-0105"
-          leftIcon={<Phone size={20} color={colors.success} />}
-          showChevron={false}
-        />
-      </Card>
+export const MedicalCenterInfoScreen: React.FC = () => (
+  <Screen bottomSpace={48}>
+    <AppText variant="title">Campus Medical Centre</AppText>
+    <AppText variant="callout" tone="ink3" style={styles.lede}>
+      Walk in any time for first aid, consultations and the pharmacy.
+    </AppText>
 
-      <Text style={styles.sectionHeader}>On-Duty Medical Team</Text>
-      <Card>
-        <ListItem
-          title="Dr. Gregory House"
-          subtitle="Chief Medical Officer • Available"
-          leftIcon={<UserCheck size={20} color={colors.primary} />}
-          showChevron={false}
-        />
-        <ListItem
-          title="Paramedic Unit Alpha"
-          subtitle="Ambulance Dispatch • On Standby"
-          leftIcon={<ShieldCheck size={20} color={colors.pastelMintDark} />}
-          showChevron={false}
-        />
-      </Card>
-    </ScrollView>
-  );
-};
+    <SectionLabel>Visit</SectionLabel>
+    <ListGroup>
+      <ListItem icon={icon(Clock)} title="Open 24 hours" subtitle="Every day, including holidays" />
+      <ListItem icon={icon(MapPin)} title="Health Block, ground floor" subtitle="Next to the Student Centre" />
+      <ListItem
+        icon={icon(Phone)}
+        title={CAMPUS.medicalCenterPhone}
+        subtitle="Front desk"
+        onPress={() => Linking.openURL(`tel:${CAMPUS.medicalCenterPhone.replace(/\s/g, '')}`)}
+        last
+      />
+    </ListGroup>
+
+    <SectionLabel>On duty now</SectionLabel>
+    <ListGroup>
+      <ListItem
+        icon={icon(Stethoscope)}
+        title="Duty doctor"
+        subtitle="General physician"
+        trailing={<StatusBadge label="Available" tone="ok" />}
+      />
+      <ListItem
+        icon={icon(Ambulance)}
+        title="Campus ambulance"
+        subtitle="Paramedic unit"
+        trailing={<StatusBadge label="On standby" tone="neutral" />}
+        last
+      />
+    </ListGroup>
+  </Screen>
+);
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.lg,
-  },
-  title: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.bold,
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  sectionHeader: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.bold,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
+  lede: { marginTop: spacing.sm },
 });

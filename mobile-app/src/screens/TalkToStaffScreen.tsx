@@ -1,166 +1,89 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { colors, spacing, typography } from '../theme';
-import { Card } from '../components/Card';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
-import { MessageSquare, PhoneCall, Calendar, UserCheck } from 'lucide-react-native';
+import { Segmented } from '../components/Chips';
+import { Field } from '../components/Field';
+import { Screen, SectionLabel, StickyFooter } from '../components/Screen';
+import { colors, spacing } from '../theme';
+
+type RequestType = 'CALLBACK' | 'CHAT' | 'APPOINTMENT';
+
+const DESCRIPTIONS: Record<RequestType, string> = {
+  CALLBACK: 'A nurse will call you on the number in your profile.',
+  CHAT: 'Send a message to the on-duty nurse.',
+  APPOINTMENT: 'Ask for a time to visit the medical centre.',
+};
 
 export const TalkToStaffScreen: React.FC = () => {
-  const [requestType, setRequestType] = useState<'CALLBACK' | 'APPOINTMENT' | 'CHAT'>('CALLBACK');
+  const navigation = useNavigation();
+  const [type, setType] = useState<RequestType>('CALLBACK');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = () => {
     if (!note.trim()) {
-      Alert.alert('Required', 'Please describe your concern briefly.');
+      Alert.alert('Tell us a little more', 'A sentence about how you’re feeling helps the nurse prepare.');
       return;
     }
     setSubmitting(true);
     setTimeout(() => {
       setSubmitting(false);
-      Alert.alert(
-        'Request Sent! 🩺',
-        `Your ${requestType.toLowerCase()} request has been sent to the on-duty campus medical staff.`,
-        [{ text: 'OK' }]
-      );
-      setNote('');
+      Alert.alert('Request sent', 'The on-duty medical team has your request.', [
+        { text: 'Done', onPress: () => navigation.goBack() },
+      ]);
     }, 600);
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Card>
-        <View style={styles.staffHeader}>
-          <View style={styles.statusDot} />
-          <Text style={styles.staffTitle}>Medical Staff On-Duty (Available)</Text>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Screen bottomSpace={32}>
+        <View style={styles.status}>
+          <View style={styles.dot} />
+          <AppText variant="label" tone="ok">
+            Nurses on duty now
+          </AppText>
         </View>
-        <Text style={styles.staffDesc}>
-          Dr. House & EMT Team are currently available for non-emergency guidance.
-        </Text>
-      </Card>
+        <AppText variant="title">For anything that isn’t an emergency.</AppText>
+        <AppText variant="callout" tone="ink3" style={styles.lede}>
+          Fever, a sprain, medication questions — talk to someone at the campus medical centre.
+        </AppText>
 
-      <Card>
-        <Text style={styles.sectionLabel}>Select Consultation Mode</Text>
-        <View style={styles.typeRow}>
-          <TouchableOpacity
-            style={[styles.typeBtn, requestType === 'CALLBACK' && styles.typeActive]}
-            onPress={() => setRequestType('CALLBACK')}
-          >
-            <PhoneCall size={18} color={requestType === 'CALLBACK' ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.typeText, requestType === 'CALLBACK' && styles.typeTextActive]}>
-              Request Callback
-            </Text>
-          </TouchableOpacity>
+        <SectionLabel>How should we reach you?</SectionLabel>
+        <Segmented
+          value={type}
+          onChange={setType}
+          options={[
+            { value: 'CALLBACK', label: 'Call back' },
+            { value: 'CHAT', label: 'Chat' },
+            { value: 'APPOINTMENT', label: 'Visit' },
+          ]}
+        />
+        <AppText variant="caption" tone="ink3" style={styles.helper}>
+          {DESCRIPTIONS[type]}
+        </AppText>
 
-          <TouchableOpacity
-            style={[styles.typeBtn, requestType === 'APPOINTMENT' && styles.typeActive]}
-            onPress={() => setRequestType('APPOINTMENT')}
-          >
-            <Calendar size={18} color={requestType === 'APPOINTMENT' ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.typeText, requestType === 'APPOINTMENT' && styles.typeTextActive]}>
-              Book Slot
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.inputLabel}>Health Concern / Symptoms Note</Text>
-        <TextInput
-          style={[styles.input, { height: 90 }]}
-          placeholder="Briefly describe your symptoms or question..."
-          multiline
+        <SectionLabel>What’s going on?</SectionLabel>
+        <Field
           value={note}
           onChangeText={setNote}
+          placeholder="e.g. Headache and mild fever since this morning"
+          multiline
         />
+      </Screen>
 
-        <Button
-          title="Submit Medical Request"
-          onPress={handleSubmit}
-          isLoading={submitting}
-          style={{ marginTop: spacing.lg }}
-        />
-      </Card>
-    </ScrollView>
+      <StickyFooter>
+        <Button title="Send request" onPress={handleSubmit} isLoading={submitting} />
+      </StickyFooter>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.lg,
-  },
-  staffHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.success,
-  },
-  staffTitle: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.bold,
-    color: colors.textPrimary,
-  },
-  staffDesc: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  sectionLabel: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.bold,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: spacing.xs,
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: spacing.borderRadius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  typeActive: {
-    backgroundColor: colors.pastelBlue,
-    borderColor: colors.primary,
-  },
-  typeText: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.semibold,
-    color: colors.textSecondary,
-  },
-  typeTextActive: {
-    color: colors.primary,
-  },
-  inputLabel: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.semibold,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.borderRadius.md,
-    padding: spacing.md,
-    fontSize: typography.sizes.sm,
-    color: colors.textPrimary,
-    textAlignVertical: 'top',
-  },
+  flex: { flex: 1, backgroundColor: colors.canvas },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.md },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.ok },
+  lede: { marginTop: spacing.sm },
+  helper: { marginTop: spacing.sm },
 });
