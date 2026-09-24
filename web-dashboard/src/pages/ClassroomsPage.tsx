@@ -1,276 +1,318 @@
-import React, { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '../components/ui/Table';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, DoorOpen, Search } from 'lucide-react';
+import { classroomService } from '../services/classroom.service';
+import { Room, Booking, BookingStatus } from '../types';
+import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { classroomService } from '../services/classroom.service';
-import { Room, Booking } from '../types';
-import { Power, Tv, Users, Calendar, Filter, Sparkles, CheckCircle2, ShieldCheck, Thermometer } from 'lucide-react';
+import { Input, Switch } from '../components/ui/Field';
+import { Tabs, Segmented } from '../components/ui/Tabs';
+import { Table, THead, TBody, TR, TH, TD } from '../components/ui/Table';
+import { EmptyState, PageHeader, SkeletonRows } from '../components/ui/Feedback';
+import { ConfirmDialog } from '../components/ui/Modal';
+import { toast } from '../components/ui/Toast';
+import { formatTimeRange, getErrorMessage, humanize } from '../lib/utils';
+import type { Tone } from '../lib/status';
+
+type Section = 'rooms' | 'bookings';
+type OccupancyFilter = 'all' | 'free' | 'in-use';
+type BookingFilter = 'upcoming' | 'past' | 'all';
+
+const bookingTone: Record<BookingStatus, Tone> = {
+  PENDING: 'info',
+  CONFIRMED: 'ok',
+  CANCELLED: 'neutral',
+  COMPLETED: 'neutral',
+};
 
 export const ClassroomsPage: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBuilding, setSelectedBuilding] = useState<string>('ALL');
+  const [section, setSection] = useState<Section>('rooms');
+  const [building, setBuilding] = useState('all');
+  const [occupancy, setOccupancy] = useState<OccupancyFilter>('all');
+  const [search, setSearch] = useState('');
+  const [bookingFilter, setBookingFilter] = useState<BookingFilter>('upcoming');
+  const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
 
-  const loadData = async () => {
-    try {
+  useEffect(() => {
+    (async () => {
       const [roomsRes, bookingsRes] = await Promise.allSettled([
         classroomService.getRooms(),
         classroomService.getBookings(true),
       ]);
       if (roomsRes.status === 'fulfilled') setRooms(roomsRes.value);
       if (bookingsRes.status === 'fulfilled') setBookings(bookingsRes.value);
-    } catch (err) {
-      console.error(err);
-    } finally {
       setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
+    })();
   }, []);
 
-  const toggleFacility = async (roomId: string, currentStatus: { hasAC: boolean; hasProjector: boolean; isOccupied: boolean }, key: 'hasAC' | 'hasProjector' | 'isOccupied') => {
+  const buildings = useMemo(() => {
+    const map = new Map<string, string>();
+    rooms.forEach(r => r.building && map.set(r.building.code, r.building.name));
+    return Array.from(map.entries());
+  }, [rooms]);
+
+  const filteredRooms = rooms.filter(r => {
+    if (building !== 'all' && r.building?.code !== building) return false;
+    if (occupancy === 'free' && r.isOccupied) return false;
+    if (occupancy === 'in-use' && !r.isOccupied) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return r.roomNumber.toLowerCase().includes(q) || r.building?.name.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const now = Date.now();
+  const filteredBookings = bookings.filter(b => {
+    const ended = new Date(b.endTime).getTime() < now;
+    if (bookingFilter === 'upcoming') return !ended && b.status !== 'CANCELLED';
+    if (bookingFilter === 'past') return ended || b.status === 'CANCELLED';
+    return true;
+  });
+  const upcomingCount = bookings.filter(b => new Date(b.endTime).getTime() >= now && b.status !== 'CANCELLED').length;
+
+  const updateRoom = async (room: Room, patch: Partial<Pick<Room, 'hasAC' | 'hasProjector' | 'isOccupied'>>) => {
+    setPendingRoomId(room.id);
     try {
-      const updated = await classroomService.updateFacilities(roomId, {
-        [key]: !currentStatus[key],
-      });
-      setRooms(prev => prev.map(r => (r.id === roomId ? { ...r, ...updated } : r)));
+      const updated = await classroomService.updateFacilities(room.id, patch);
+      setRooms(prev => prev.map(r => (r.id === room.id ? { ...r, ...updated } : r)));
+      if ('isOccupied' in patch) toast.success(`${room.roomNumber} marked ${patch.isOccupied ? 'in use' : 'free'}`);
     } catch (err) {
-      console.error('Failed to update facility', err);
+      toast.error(getErrorMessage(err, `Couldn’t update ${room.roomNumber}.`));
+    } finally {
+      setPendingRoomId(null);
     }
   };
 
-  const displayRooms = rooms.length > 0 ? rooms : [
-    { id: '1', roomNumber: 'ENG-101', floor: 1, capacity: 60, hasAC: true, hasProjector: true, isOccupied: false, building: { name: 'Alan Turing Engineering Hall', code: 'ENG', id: 'b1', latitude: 0, longitude: 0, floorCount: 4 } },
-    { id: '2', roomNumber: 'ENG-204', floor: 2, capacity: 35, hasAC: true, hasProjector: true, isOccupied: true, building: { name: 'Alan Turing Engineering Hall', code: 'ENG', id: 'b1', latitude: 0, longitude: 0, floorCount: 4 } },
-    { id: '3', roomNumber: 'SCI-LabA', floor: 1, capacity: 25, hasAC: false, hasProjector: true, isOccupied: false, building: { name: 'Marie Curie Science Complex', code: 'SCI', id: 'b2', latitude: 0, longitude: 0, floorCount: 3 } },
-  ];
+  const setBookingStatus = async (booking: Booking, status: BookingStatus) => {
+    try {
+      const updated = await classroomService.updateBookingStatus(booking.id, status);
+      setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, status: updated.status } : b)));
+      toast.success(status === 'CANCELLED' ? 'Booking cancelled' : `Booking ${humanize(status).toLowerCase()}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Couldn’t update the booking.'));
+    } finally {
+      setCancelTarget(null);
+    }
+  };
 
-  const filteredRooms = displayRooms.filter(r => {
-    if (selectedBuilding === 'ALL') return true;
-    return r.building?.code === selectedBuilding;
-  });
-
-  const vacantCount = displayRooms.filter(r => !r.isOccupied).length;
-  const acActiveCount = displayRooms.filter(r => r.hasAC).length;
+  const freeCount = rooms.filter(r => !r.isOccupied).length;
 
   return (
-    <div className="space-y-6">
-      {/* Header & Metric Strip */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Facility Automation</span>
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mt-1">Smart Classroom & Facility Hub</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Monitor real-time room occupancy, schedules, and automated HVAC/AV climate controls
-          </p>
-        </div>
+    <>
+      <PageHeader
+        eyebrow="Operations"
+        title="Classrooms"
+        description={
+          loading
+            ? 'Room availability, equipment and bookings across campus.'
+            : `${rooms.length} rooms across ${buildings.length} ${buildings.length === 1 ? 'building' : 'buildings'} · ${freeCount} free right now`
+        }
+      />
 
-        {/* Quick Facility Stat Badges */}
-        <div className="flex items-center gap-2">
-          <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
-            <span className="text-emerald-800 font-bold">{vacantCount}</span>
-            <span className="text-emerald-600 ml-1">Vacant Now</span>
-          </div>
-          <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-xs">
-            <span className="text-blue-800 font-bold">{acActiveCount}</span>
-            <span className="text-blue-600 ml-1">Climate On</span>
-          </div>
-        </div>
-      </div>
+      <Tabs
+        className="mb-6"
+        value={section}
+        onChange={setSection}
+        items={[
+          { value: 'rooms', label: 'Rooms', count: rooms.length },
+          { value: 'bookings', label: 'Bookings', count: upcomingCount },
+        ]}
+      />
 
-      {/* Building Filter Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <button
-          onClick={() => setSelectedBuilding('ALL')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-            selectedBuilding === 'ALL'
-              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          All Buildings ({displayRooms.length})
-        </button>
-        <button
-          onClick={() => setSelectedBuilding('ENG')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-            selectedBuilding === 'ENG'
-              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          Engineering Hall (ENG)
-        </button>
-        <button
-          onClick={() => setSelectedBuilding('SCI')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-            selectedBuilding === 'SCI'
-              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          Science Complex (SCI)
-        </button>
-      </div>
-
-      {/* Classrooms Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredRooms.map(room => (
-          <Card key={room.id} interactive className="flex flex-col justify-between">
-            <CardHeader className="pb-3 bg-slate-50/50">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  {room.building?.name || 'Academic Block'}
-                </span>
-                <CardTitle className="text-base text-slate-900 font-bold mt-0.5">{room.roomNumber}</CardTitle>
-              </div>
-              <Badge variant={room.isOccupied ? 'warning' : 'success'} dot>
-                {room.isOccupied ? 'Occupied' : 'Vacant'}
-              </Badge>
-            </CardHeader>
-
-            <CardContent className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block">Capacity</span>
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1 mt-0.5">
-                    <Users className="w-3.5 h-3.5 text-slate-500" />
-                    {room.capacity} Student Seats
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block">Location</span>
-                  <span className="text-xs font-bold text-slate-800 block mt-0.5">
-                    Floor {room.floor}
-                  </span>
-                </div>
-              </div>
-
-              {/* IoT Automated Climate & AV Controls */}
-              <div className="pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">IoT Controls</span>
-                  <span className="text-[10px] text-slate-400">Instant Telemetry</span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    onClick={() => toggleFacility(room.id, room, 'hasAC')}
-                    title="Toggle HVAC/Climate control"
-                    className={`p-2 rounded-lg text-xs font-semibold border transition-all flex flex-col items-center justify-center gap-1 ${
-                      room.hasAC
-                        ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-2xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Power className={`w-3.5 h-3.5 ${room.hasAC ? 'text-blue-600' : 'text-slate-400'}`} />
-                    <span className="text-[10px]">{room.hasAC ? 'HVAC On' : 'HVAC Off'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => toggleFacility(room.id, room, 'hasProjector')}
-                    title="Toggle AV & Projector"
-                    className={`p-2 rounded-lg text-xs font-semibold border transition-all flex flex-col items-center justify-center gap-1 ${
-                      room.hasProjector
-                        ? 'bg-purple-50 border-purple-200 text-purple-700 shadow-2xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Tv className={`w-3.5 h-3.5 ${room.hasProjector ? 'text-purple-600' : 'text-slate-400'}`} />
-                    <span className="text-[10px]">{room.hasProjector ? 'AV Ready' : 'AV Off'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => toggleFacility(room.id, room, 'isOccupied')}
-                    title="Override occupancy status"
-                    className={`p-2 rounded-lg text-xs font-semibold border transition-all flex flex-col items-center justify-center gap-1 ${
-                      room.isOccupied
-                        ? 'bg-amber-50 border-amber-200 text-amber-800 shadow-2xs'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70'
-                    }`}
-                  >
-                    <Users className={`w-3.5 h-3.5 ${room.isOccupied ? 'text-amber-600' : 'text-emerald-600'}`} />
-                    <span className="text-[10px]">{room.isOccupied ? 'Set Vacant' : 'Set In-Use'}</span>
-                  </button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Classroom Reservation Logs */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <div>
-              <CardTitle>Classroom Reservation Schedule</CardTitle>
-              <p className="text-[11px] text-slate-400">Upcoming faculty and student study sessions</p>
+      {section === 'rooms' ? (
+        <Card>
+          <div className="flex flex-col xl:flex-row xl:items-center gap-3 justify-between p-4 border-b border-line">
+            <div className="flex flex-wrap items-center gap-2">
+              <Segmented
+                value={building}
+                onChange={setBuilding}
+                items={[{ value: 'all', label: 'All buildings' }, ...buildings.map(([code]) => ({ value: code, label: code }))]}
+              />
+              <Segmented
+                value={occupancy}
+                onChange={setOccupancy}
+                items={[
+                  { value: 'all', label: 'Any status' },
+                  { value: 'free', label: 'Free' },
+                  { value: 'in-use', label: 'In use' },
+                ]}
+              />
+            </div>
+            <div className="w-full xl:w-64">
+              <Input
+                aria-label="Search rooms"
+                placeholder="Search rooms"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                leading={<Search className="w-4 h-4" />}
+                className="h-9"
+              />
             </div>
           </div>
-        </CardHeader>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeaderCell>Room</TableHeaderCell>
-              <TableHeaderCell>Booked By</TableHeaderCell>
-              <TableHeaderCell>Session Purpose</TableHeaderCell>
-              <TableHeaderCell>Time Range</TableHeaderCell>
-              <TableHeaderCell>Reservation Status</TableHeaderCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {(bookings.length > 0
-              ? bookings
-              : [
-                  {
-                    id: 'b1',
-                    roomId: '1',
-                    userId: 'u1',
-                    startTime: new Date().toISOString(),
-                    endTime: new Date(Date.now() + 7200000).toISOString(),
-                    purpose: 'CS401: Distributed Systems Lecture',
-                    status: 'CONFIRMED' as const,
-                    room: { roomNumber: 'ENG-101' } as Room,
-                    user: { name: 'Dr. Sarah Connor', email: 'faculty@smartcampus.edu' } as any,
-                  },
-                ]
-            ).map(booking => (
-              <TableRow key={booking.id}>
-                <TableCell className="font-bold text-slate-900">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                    <span>{booking.room?.roomNumber || 'ENG-101'}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <p className="text-xs font-semibold text-slate-900">{booking.user?.name || 'Faculty Member'}</p>
-                  <p className="text-[11px] text-slate-400">{booking.user?.email || 'campus@smartcampus.edu'}</p>
-                </TableCell>
-                <TableCell className="text-xs text-slate-700 font-medium">
-                  {booking.purpose || 'Academic Reservation'}
-                </TableCell>
-                <TableCell className="text-xs text-slate-500 font-mono tabular-nums">
-                  {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} –{' '}
-                  {new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={booking.status === 'CONFIRMED' ? 'success' : 'default'} dot>
-                    {booking.status}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
+
+          {loading ? (
+            <div className="pt-5">
+              <SkeletonRows rows={4} />
+            </div>
+          ) : filteredRooms.length === 0 ? (
+            <EmptyState
+              icon={DoorOpen}
+              title={rooms.length === 0 ? 'No rooms yet' : 'No rooms match these filters'}
+              description={rooms.length === 0 ? 'Rooms added by an administrator will appear here.' : 'Try a different building or status.'}
+            />
+          ) : (
+            <Table>
+              <THead className="border-t-0">
+                <tr>
+                  <TH>Room</TH>
+                  <TH>Building</TH>
+                  <TH className="text-right">Seats</TH>
+                  <TH>Air conditioning</TH>
+                  <TH>Projector</TH>
+                  <TH>Status</TH>
+                  <TH className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </TH>
+                </tr>
+              </THead>
+              <TBody>
+                {filteredRooms.map(room => (
+                  <TR key={room.id}>
+                    <TD>
+                      <p className="text-ink font-medium">{room.roomNumber}</p>
+                      <p className="text-xs text-ink-3">Floor {room.floor}</p>
+                    </TD>
+                    <TD>{room.building?.name}</TD>
+                    <TD className="text-right tabular">{room.capacity}</TD>
+                    <TD>
+                      <Switch
+                        label={`Air conditioning in ${room.roomNumber}`}
+                        checked={room.hasAC}
+                        disabled={pendingRoomId === room.id}
+                        onChange={value => updateRoom(room, { hasAC: value })}
+                      />
+                    </TD>
+                    <TD>
+                      <Switch
+                        label={`Projector in ${room.roomNumber}`}
+                        checked={room.hasProjector}
+                        disabled={pendingRoomId === room.id}
+                        onChange={value => updateRoom(room, { hasProjector: value })}
+                      />
+                    </TD>
+                    <TD>
+                      <Badge tone={room.isOccupied ? 'warn' : 'ok'}>{room.isOccupied ? 'In use' : 'Free'}</Badge>
+                    </TD>
+                    <TD className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pendingRoomId === room.id}
+                        onClick={() => updateRoom(room, { isOccupied: !room.isOccupied })}
+                      >
+                        {room.isOccupied ? 'Mark free' : 'Mark in use'}
+                      </Button>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      ) : (
+        <Card>
+          <div className="p-4 border-b border-line">
+            <Segmented
+              value={bookingFilter}
+              onChange={setBookingFilter}
+              items={[
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'past', label: 'Past & cancelled' },
+                { value: 'all', label: 'All' },
+              ]}
+            />
+          </div>
+          {loading ? (
+            <div className="pt-5">
+              <SkeletonRows rows={3} />
+            </div>
+          ) : filteredBookings.length === 0 ? (
+            <EmptyState
+              icon={CalendarDays}
+              title={bookingFilter === 'upcoming' ? 'No upcoming bookings' : 'Nothing here yet'}
+              description="Bookings made by students and faculty in the app appear here."
+            />
+          ) : (
+            <Table>
+              <THead className="border-t-0">
+                <tr>
+                  <TH>Room</TH>
+                  <TH>When</TH>
+                  <TH>Booked by</TH>
+                  <TH>Purpose</TH>
+                  <TH>Status</TH>
+                  <TH className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </TH>
+                </tr>
+              </THead>
+              <TBody>
+                {filteredBookings.map(booking => {
+                  const ended = new Date(booking.endTime).getTime() < now;
+                  return (
+                    <TR key={booking.id}>
+                      <TD>
+                        <p className="text-ink font-medium">{booking.room?.roomNumber}</p>
+                        <p className="text-xs text-ink-3">{booking.room?.building?.name}</p>
+                      </TD>
+                      <TD className="whitespace-nowrap">{formatTimeRange(booking.startTime, booking.endTime)}</TD>
+                      <TD>
+                        <p className="text-ink">{booking.user?.name}</p>
+                        <p className="text-xs text-ink-3">{booking.user?.role && humanize(booking.user.role)}</p>
+                      </TD>
+                      <TD className="max-w-[220px] truncate">{booking.purpose || '—'}</TD>
+                      <TD>
+                        <Badge tone={bookingTone[booking.status]}>{humanize(booking.status)}</Badge>
+                      </TD>
+                      <TD className="text-right whitespace-nowrap">
+                        {booking.status === 'PENDING' && (
+                          <Button size="sm" variant="secondary" onClick={() => setBookingStatus(booking, 'CONFIRMED')}>
+                            Approve
+                          </Button>
+                        )}
+                        {!ended && (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                          <Button size="sm" variant="ghost" onClick={() => setCancelTarget(booking)}>
+                            Cancel
+                          </Button>
+                        )}
+                      </TD>
+                    </TR>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      <ConfirmDialog
+        isOpen={!!cancelTarget}
+        title="Cancel booking?"
+        description={
+          cancelTarget
+            ? `${cancelTarget.room?.roomNumber} for ${cancelTarget.user?.name} (${formatTimeRange(cancelTarget.startTime, cancelTarget.endTime)}) will be released.`
+            : ''
+        }
+        confirmLabel="Cancel booking"
+        destructive
+        onConfirm={() => cancelTarget && setBookingStatus(cancelTarget, 'CANCELLED')}
+        onCancel={() => setCancelTarget(null)}
+      />
+    </>
   );
 };

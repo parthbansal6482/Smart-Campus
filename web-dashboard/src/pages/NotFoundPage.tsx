@@ -2,17 +2,13 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 
-export const NotFoundPage: React.FC = () => {
-  return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4 text-center">
-      <h1 className="text-6xl font-bold text-campus-600 font-mono">404</h1>
-      <h2 className="text-xl font-bold text-slate-900 mt-4">Page Not Found</h2>
-      <p className="text-sm text-slate-500 mt-2 max-w-sm">
-        The page you are looking for does not exist or has been moved.
-      </p>
-      <Link to="/" className="mt-6">
-        <Button>Return to Dashboard</Button>
-      </Link>
-    </div>
-  );
-};
+export const NotFoundPage: React.FC = () => (
+  <div className="min-h-screen bg-canvas flex flex-col items-center justify-center p-6 text-center">
+    <p className="text-[13px] text-ink-3">Error 404</p>
+    <h1 className="font-serif text-[56px] leading-tight text-ink mt-2">Page not found</h1>
+    <p className="text-sm text-ink-3 mt-3 max-w-sm">The page you’re looking for doesn’t exist or has moved.</p>
+    <Link to="/" className="mt-8">
+      <Button variant="secondary">Back to dashboard</Button>
+    </Link>
+  </div>
+);

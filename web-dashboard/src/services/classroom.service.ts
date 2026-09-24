@@ -1,5 +1,5 @@
 import { api } from './api';
-import { ApiResponse, Building, Room, Booking } from '../types';
+import { ApiResponse, Building, Room, Booking, BookingStatus } from '../types';
 
 export const classroomService = {
   getBuildings: async (): Promise<Building[]> => {
@@ -24,6 +24,11 @@ export const classroomService = {
 
   getBookings: async (all = true): Promise<Booking[]> => {
     const res = await api.get<ApiResponse<Booking[]>>('/classrooms/bookings', { params: { all } });
+    return res.data.data;
+  },
+
+  updateBookingStatus: async (id: string, status: BookingStatus): Promise<Booking> => {
+    const res = await api.patch<ApiResponse<Booking>>(`/classrooms/bookings/${id}/status`, { status });
     return res.data.data;
   },
 };
