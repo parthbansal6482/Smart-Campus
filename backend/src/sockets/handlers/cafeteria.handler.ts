@@ -1,22 +1,27 @@
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
+import { Role } from '@prisma/client';
+import { AuthenticatedSocket } from '../socket.server';
+import { prisma } from '../../config/db';
 import { logger } from '../../utils/logger';
 
-export const registerCafeteriaHandlers = (io: Server, socket: Socket) => {
-  // Staff joins kitchen channel
-  socket.on('cafeteria:join_staff', () => {
-    socket.join('cafeteria-staff');
-    logger.info(`Socket ${socket.id} joined cafeteria-staff room`);
-  });
+export const registerCafeteriaHandlers = (io: Server, socket: AuthenticatedSocket) => {
+  const { userId, role } = socket.data.user;
 
-  // User tracks their order
-  socket.on('cafeteria:track_order', (orderId: string) => {
-    socket.join(`order-${orderId}`);
-    logger.debug(`Socket ${socket.id} tracking order-${orderId}`);
-  });
+  // Track one specific order — only its owner or cafeteria staff/admin may
+  // join, so students can't watch each other's orders.
+  socket.on('cafeteria:track_order', async (orderId: string) => {
+    if (typeof orderId !== 'string' || !orderId) return;
 
-  // User joins their personal order updates
-  socket.on('cafeteria:join_user_orders', (userId: string) => {
-    socket.join(`user-${userId}`);
-    logger.debug(`Socket ${socket.id} joined user-${userId} orders`);
+    if (role === Role.CAFETERIA_STAFF || role === Role.ADMIN) {
+      socket.join(`order-${orderId}`);
+      return;
+    }
+
+    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { userId: true } });
+    if (order?.userId === userId) {
+      socket.join(`order-${orderId}`);
+    } else {
+      logger.debug(`Rejected cafeteria:track_order for ${orderId} from non-owner ${userId}`);
+    }
   });
 };

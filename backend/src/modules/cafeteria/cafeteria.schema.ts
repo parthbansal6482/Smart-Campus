@@ -23,7 +23,7 @@ export const updateMenuItemSchema = z.object({
     category: z.nativeEnum(MenuCategory).optional(),
     isVeg: z.boolean().optional(),
     spiceLevel: z.number().int().min(0).max(3).optional(),
-    rating: z.number().optional(),
+    rating: z.number().min(0).max(5).optional(),
     isAvailable: z.boolean().optional(),
     imageUrl: z.string().url().optional(),
   }),
@@ -34,13 +34,16 @@ export const createOrderSchema = z.object({
     orderType: z.nativeEnum(OrderType).default(OrderType.PICKUP),
     tableNumber: z.string().optional(),
     pickupTime: z.string().datetime().optional(),
-    note: z.string().optional(),
-    items: z.array(
-      z.object({
-        menuItemId: z.string().uuid(),
-        quantity: z.number().int().min(1, 'Quantity must be at least 1'),
-      })
-    ).min(1, 'Order must contain at least one item'),
+    note: z.string().max(500).optional(),
+    offerCode: z.string().optional(),
+    items: z
+      .array(
+        z.object({
+          menuItemId: z.string().uuid(),
+          quantity: z.number().int().min(1, 'Quantity must be at least 1').max(20),
+        })
+      )
+      .min(1, 'Order must contain at least one item'),
   }),
 });
 
@@ -54,7 +57,7 @@ export const createOfferSchema = z.object({
   body: z.object({
     title: z.string().min(2),
     description: z.string().optional(),
-    code: z.string().min(3),
+    code: z.string().min(3).toUpperCase(),
     discountPercent: z.number().min(1).max(100),
     isBanner: z.boolean().default(true),
     imageUrl: z.string().url().optional(),

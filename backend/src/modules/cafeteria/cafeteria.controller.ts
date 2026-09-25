@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { cafeteriaService } from './cafeteria.service';
 import { sendSuccess } from '../../utils/response';
 import { MenuCategory, OrderStatus, Role } from '@prisma/client';
-import { getSocketIO } from '../../sockets/socket.server';
+import { getPagination, buildMeta } from '../../utils/pagination';
 
 export class CafeteriaController {
   async getMenu(req: Request, res: Response, next: NextFunction) {
@@ -46,10 +46,10 @@ export class CafeteriaController {
     }
   }
 
-  async deleteMenuItem(req: Request, res: Response, next: NextFunction) {
+  async archiveMenuItem(req: Request, res: Response, next: NextFunction) {
     try {
-      await cafeteriaService.deleteMenuItem(req.params.id);
-      return sendSuccess(res, null, 'Menu item deleted');
+      await cafeteriaService.archiveMenuItem(req.params.id);
+      return sendSuccess(res, null, 'Menu item removed from the catalog');
     } catch (error) {
       return next(error);
     }
@@ -78,9 +78,10 @@ export class CafeteriaController {
       const isStaffOrAdmin = req.user?.role === Role.CAFETERIA_STAFF || req.user?.role === Role.ADMIN;
       const userId = isStaffOrAdmin && req.query.all === 'true' ? undefined : req.user?.userId;
       const status = req.query.status as OrderStatus | undefined;
+      const { skip, take, page, limit } = getPagination(req);
 
-      const orders = await cafeteriaService.getOrders(userId, status);
-      return sendSuccess(res, orders, 'Orders retrieved');
+      const { orders, total } = await cafeteriaService.getOrders({ userId, status, skip, take });
+      return sendSuccess(res, orders, 'Orders retrieved', 200, buildMeta(page, limit, total));
     } catch (error) {
       return next(error);
     }
@@ -88,7 +89,7 @@ export class CafeteriaController {
 
   async getOrderById(req: Request, res: Response, next: NextFunction) {
     try {
-      const order = await cafeteriaService.getOrderById(req.params.id);
+      const order = await cafeteriaService.getOrderById(req.params.id, { userId: req.user!.userId, role: req.user!.role });
       return sendSuccess(res, order, 'Order retrieved');
     } catch (error) {
       return next(error);
@@ -98,10 +99,6 @@ export class CafeteriaController {
   async createOrder(req: Request, res: Response, next: NextFunction) {
     try {
       const order = await cafeteriaService.createOrder(req.user!.userId, req.body);
-      try {
-        const io = getSocketIO();
-        io.to('cafeteria-staff').emit('order:new', order);
-      } catch {}
       return sendSuccess(res, order, 'Order placed successfully', 201);
     } catch (error) {
       return next(error);
@@ -110,13 +107,10 @@ export class CafeteriaController {
 
   async updateOrderStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const order = await cafeteriaService.updateOrderStatus(req.params.id, req.body.status);
-      try {
-        const io = getSocketIO();
-        io.to(`order-${order.id}`).emit('order:status_updated', order);
-        io.to(`user-${order.userId}`).emit('order:status_updated', order);
-        io.to('cafeteria-staff').emit('order:status_updated', order);
-      } catch {}
+      const order = await cafeteriaService.updateOrderStatus(req.params.id, req.body.status, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+      });
       return sendSuccess(res, order, 'Order status updated');
     } catch (error) {
       return next(error);
