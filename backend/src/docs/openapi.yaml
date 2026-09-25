@@ -1,0 +1,595 @@
+openapi: 3.0.3
+info:
+  title: Smart Campus API
+  version: "1.0.0"
+  description: |
+    Unified backend for the Smart Campus system — classroom booking & automation,
+    emergency medical dispatch, and cafeteria ordering.
+
+    All authenticated endpoints expect `Authorization: Bearer <accessToken>`.
+    Access tokens are short-lived (see `JWT_EXPIRES_IN`); use `/auth/refresh`
+    with the refresh token issued at login to obtain a new one.
+servers:
+  - url: /api/v1
+tags:
+  - name: Auth
+  - name: Users
+  - name: Classrooms
+  - name: Medical Help
+  - name: Cafeteria
+  - name: Notifications
+  - name: Uploads
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: {}
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+            totalPages: { type: integer }
+    ApiError:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        error: {}
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        role:
+          type: string
+          enum: [STUDENT, FACULTY, CAFETERIA_STAFF, MEDICAL_STAFF, AMBULANCE_RESPONDER, ADMIN]
+        phone: { type: string, nullable: true }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    AuthTokens:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    Room:
+      type: object
+      properties:
+        id: { type: string }
+        roomNumber: { type: string }
+        floor: { type: integer }
+        capacity: { type: integer }
+        hasAC: { type: boolean }
+        hasProjector: { type: boolean }
+        isOccupied: { type: boolean }
+        buildingId: { type: string }
+    Booking:
+      type: object
+      properties:
+        id: { type: string }
+        roomId: { type: string }
+        userId: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        purpose: { type: string, nullable: true }
+        status: { type: string, enum: [PENDING, CONFIRMED, CANCELLED, COMPLETED] }
+    Emergency:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        buildingId: { type: string, nullable: true }
+        locationDetail: { type: string, nullable: true }
+        tag: { type: string, enum: [FAINTED, INJURY, ALLERGIC_REACTION, BREATHING, OTHER] }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [REPORTED, ASSIGNED, ON_THE_WAY, ARRIVED, HANDLED, CANCELLED] }
+        reportedAt: { type: string, format: date-time }
+    MenuItem:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        price: { type: number }
+        category: { type: string, enum: [BREAKFAST, LUNCH, SNACKS, BEVERAGES, DESSERTS, SPECIAL] }
+        isVeg: { type: boolean }
+        isAvailable: { type: boolean }
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        orderToken: { type: string }
+        orderType: { type: string, enum: [PICKUP, DINE_IN] }
+        status: { type: string, enum: [PLACED, ACCEPTED, PREPARING, READY, COLLECTED, CANCELLED] }
+        totalAmount: { type: number }
+        discountAmount: { type: number }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: Authenticated, but not allowed to perform this action
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a student account
+      description: Public self-signup is always a STUDENT account. Staff/faculty accounts are created by an admin via `POST /users`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, minLength: 2 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                phone: { type: string }
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: Email already registered }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Issues an access token and a refresh token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401': { description: Invalid credentials }
+        '423': { description: Account temporarily locked after repeated failed attempts }
+        '429': { description: Too many login attempts from this IP/email }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Exchange a refresh token for a new access token (rotates the refresh token)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { description: New token pair issued }
+        '401': { description: Refresh token invalid, expired, or already used }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a single refresh token (logs out one device)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { description: Logged out }
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      summary: Revoke every refresh token for the current user (logs out all devices)
+      responses:
+        '200': { description: All sessions revoked }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset email
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: "Always returns success, whether or not the email exists, to avoid leaking which emails are registered" }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset a password using the token from the reset email
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 8 }
+      responses:
+        '200': { description: Password updated, all sessions revoked }
+        '400': { description: Token invalid or expired }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the current user's profile
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users (admin only, paginated)
+      parameters:
+        - { name: role, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string }, description: "Matches name or email" }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Users]
+      summary: Create a staff/faculty/admin account (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                role: { type: string }
+                phone: { type: string }
+      responses:
+        '201': { description: Created }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get a user's profile (self, or admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/{id}/role:
+    patch:
+      tags: [Users]
+      summary: Change a user's role (admin only; cannot demote the last remaining admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties: { role: { type: string } }
+      responses:
+        '200': { description: Updated }
+        '409': { description: Refused — this would leave campus with no administrator }
+
+  /users/me/push-token:
+    put:
+      tags: [Users]
+      summary: Register or clear this device's Expo push token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expoPushToken: { type: string, nullable: true }
+      responses:
+        '200': { description: Saved }
+
+  /classrooms/buildings:
+    get:
+      tags: [Classrooms]
+      summary: List buildings and their rooms
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Classrooms]
+      summary: Create a building (admin only)
+      responses:
+        '201': { description: Created }
+
+  /classrooms/rooms:
+    get:
+      tags: [Classrooms]
+      summary: List rooms (filterable by building, occupancy, capacity)
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Classrooms]
+      summary: Create a room (admin only)
+      responses:
+        '201': { description: Created }
+
+  /classrooms/rooms/available:
+    get:
+      tags: [Classrooms]
+      summary: Find rooms free for a given time window
+      description: Checks both existing confirmed bookings and the recurring class timetable.
+      parameters:
+        - { name: startTime, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: endTime, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: minCapacity, in: query, schema: { type: integer } }
+        - { name: buildingId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Rooms with no conflicting booking or scheduled class in the window
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /classrooms/rooms/{id}/facilities:
+    patch:
+      tags: [Classrooms]
+      summary: Toggle a room's AC/projector/occupancy (admin or faculty)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated }
+
+  /classrooms/schedules:
+    get:
+      tags: [Classrooms]
+      summary: List recurring class schedules for a room
+      parameters:
+        - { name: roomId, in: query, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Classrooms]
+      summary: Create a recurring class schedule (admin only)
+      responses:
+        '201': { description: Created }
+
+  /classrooms/bookings:
+    get:
+      tags: [Classrooms]
+      summary: List bookings (own bookings, or all for admin/faculty with `?all=true`), paginated
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Classrooms]
+      summary: Book a room for a time window
+      description: Start time must be in the future; overlapping confirmed bookings for the same room are rejected (enforced at the database level).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roomId, startTime, endTime]
+              properties:
+                roomId: { type: string }
+                startTime: { type: string, format: date-time }
+                endTime: { type: string, format: date-time }
+                purpose: { type: string }
+      responses:
+        '201': { description: Booked }
+        '409': { description: Conflicts with an existing booking for this room and time }
+
+  /classrooms/bookings/{id}/status:
+    patch:
+      tags: [Classrooms]
+      summary: Update a booking's status (owner can cancel; admin/faculty can also confirm/complete)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /medical-help/emergencies/trigger:
+    post:
+      tags: [Medical Help]
+      summary: Trigger an SOS alert
+      description: Rate-limited per account to prevent flooding responders, and de-duplicated if the same user double-taps within a few seconds. Never blocked by the campus geofence — at worst the alert is created without a matched building.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number }
+                longitude: { type: number }
+                buildingId: { type: string }
+                locationDetail: { type: string, example: "Ground floor, near RTH-105" }
+                tag: { type: string }
+                description: { type: string }
+      responses:
+        '201': { description: Emergency created and responders notified }
+        '429': { description: Too many alerts from this account recently }
+
+  /medical-help/emergencies/active:
+    get:
+      tags: [Medical Help]
+      summary: List active (unresolved) emergencies (medical staff, responders, admin)
+      responses:
+        '200': { description: OK }
+
+  /medical-help/emergencies/{id}/status:
+    patch:
+      tags: [Medical Help]
+      summary: Update an emergency's status
+      description: Only forward transitions along REPORTED → ASSIGNED → ON_THE_WAY → ARRIVED → HANDLED are allowed (plus CANCELLED from any non-terminal state).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated, reporter notified }
+        '409': { description: Invalid status transition }
+
+  /medical-help/medicines:
+    get:
+      tags: [Medical Help]
+      summary: List pharmacy items
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Medical Help]
+      summary: Add a pharmacy item (medical staff/admin)
+      responses:
+        '201': { description: Created }
+
+  /medical-help/medicine-orders:
+    post:
+      tags: [Medical Help]
+      summary: Order medicines from the campus pharmacy
+      description: Stock is decremented transactionally at order time; insufficient stock is rejected atomically even under concurrent orders.
+      responses:
+        '201': { description: Ordered }
+        '409': { description: One or more items are out of stock }
+
+  /cafeteria/menu:
+    get:
+      tags: [Cafeteria]
+      summary: List today's menu
+      security: []
+      responses:
+        '200': { description: OK }
+
+  /cafeteria/orders:
+    post:
+      tags: [Cafeteria]
+      summary: Place a food order
+      description: Duplicate menu items in the same request are merged rather than rejected. An `offerCode` may be supplied to apply a live offer's discount.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                orderType: { type: string, enum: [PICKUP, DINE_IN] }
+                pickupTime: { type: string, format: date-time }
+                offerCode: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      menuItemId: { type: string }
+                      quantity: { type: integer, minimum: 1 }
+      responses:
+        '201': { description: Order placed }
+
+  /cafeteria/orders/{id}:
+    get:
+      tags: [Cafeteria]
+      summary: Get an order (owner or cafeteria staff/admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List the current user's notifications, paginated
+      responses:
+        '200': { description: OK }
+
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated }
+
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: Upload a file (e.g. a prescription photo) and get back a public URL
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400': { description: Missing file, wrong type, or file too large }
