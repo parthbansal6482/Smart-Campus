@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { classroomsService } from './classrooms.service';
 import { sendSuccess } from '../../utils/response';
+import { getPagination, buildMeta } from '../../utils/pagination';
+import { Role } from '@prisma/client';
 
 export class ClassroomsController {
   // Buildings
@@ -37,6 +39,21 @@ export class ClassroomsController {
     }
   }
 
+  async getAvailableRooms(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startTime, endTime, minCapacity, buildingId } = req.query;
+      const rooms = await classroomsService.getAvailableRooms({
+        startTime: new Date(startTime as string),
+        endTime: new Date(endTime as string),
+        minCapacity: minCapacity ? parseInt(minCapacity as string, 10) : undefined,
+        buildingId: buildingId as string | undefined,
+      });
+      return sendSuccess(res, rooms, 'Available classrooms retrieved successfully');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
   async getRoomById(req: Request, res: Response, next: NextFunction) {
     try {
       const room = await classroomsService.getRoomById(req.params.id);
@@ -57,8 +74,36 @@ export class ClassroomsController {
 
   async updateFacilities(req: Request, res: Response, next: NextFunction) {
     try {
-      const room = await classroomsService.updateFacilities(req.params.id, req.body);
+      const room = await classroomsService.updateFacilities(req.params.id, req.body, req.user!.userId);
       return sendSuccess(res, room, 'Classroom facilities updated successfully');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  // Recurring schedules
+  async getSchedules(req: Request, res: Response, next: NextFunction) {
+    try {
+      const schedules = await classroomsService.getSchedules(req.query.roomId as string | undefined);
+      return sendSuccess(res, schedules, 'Schedules retrieved successfully');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async createSchedule(req: Request, res: Response, next: NextFunction) {
+    try {
+      const schedule = await classroomsService.createSchedule(req.body);
+      return sendSuccess(res, schedule, 'Schedule created successfully', 201);
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async deleteSchedule(req: Request, res: Response, next: NextFunction) {
+    try {
+      await classroomsService.deleteSchedule(req.params.id);
+      return sendSuccess(res, null, 'Schedule removed successfully');
     } catch (error) {
       return next(error);
     }
@@ -67,10 +112,12 @@ export class ClassroomsController {
   // Bookings
   async getBookings(req: Request, res: Response, next: NextFunction) {
     try {
-      const isPrivileged = req.user?.role === 'ADMIN' || req.user?.role === 'FACULTY';
+      const isPrivileged = req.user?.role === Role.ADMIN || req.user?.role === Role.FACULTY;
       const userId = isPrivileged && req.query.all === 'true' ? undefined : req.user?.userId;
-      const bookings = await classroomsService.getBookings(userId);
-      return sendSuccess(res, bookings, 'Bookings retrieved successfully');
+      const { skip, take, page, limit } = getPagination(req);
+
+      const { bookings, total } = await classroomsService.getBookings({ userId, skip, take });
+      return sendSuccess(res, bookings, 'Bookings retrieved successfully', 200, buildMeta(page, limit, total));
     } catch (error) {
       return next(error);
     }
@@ -87,7 +134,10 @@ export class ClassroomsController {
 
   async updateBookingStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const booking = await classroomsService.updateBookingStatus(req.params.id, req.body.status);
+      const booking = await classroomsService.updateBookingStatus(req.params.id, req.body.status, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+      });
       return sendSuccess(res, booking, 'Booking status updated successfully');
     } catch (error) {
       return next(error);
