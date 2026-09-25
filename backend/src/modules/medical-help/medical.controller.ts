@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { medicalService } from './medical.service';
 import { sendSuccess } from '../../utils/response';
-import { MedicineCategory, MedicineOrderStatus, ConsultationStatus, EmergencyStatus, Role } from '@prisma/client';
-import { getSocketIO } from '../../sockets/socket.server';
+import { MedicineCategory, ConsultationStatus, Role } from '@prisma/client';
+import { getPagination, buildMeta } from '../../utils/pagination';
 
 export class MedicalController {
   // Emergencies
@@ -19,8 +19,10 @@ export class MedicalController {
     try {
       const isStaff = req.user?.role === Role.MEDICAL_STAFF || req.user?.role === Role.AMBULANCE_RESPONDER || req.user?.role === Role.ADMIN;
       const userId = isStaff && req.query.all === 'true' ? undefined : req.user?.userId;
-      const data = await medicalService.getAllEmergencies(userId);
-      return sendSuccess(res, data, 'Emergencies retrieved');
+      const { skip, take, page, limit } = getPagination(req);
+
+      const { emergencies, total } = await medicalService.getAllEmergencies({ userId, skip, take });
+      return sendSuccess(res, emergencies, 'Emergencies retrieved', 200, buildMeta(page, limit, total));
     } catch (error) {
       return next(error);
     }
@@ -29,10 +31,6 @@ export class MedicalController {
   async triggerEmergency(req: Request, res: Response, next: NextFunction) {
     try {
       const emergency = await medicalService.triggerEmergency(req.user!.userId, req.body);
-      try {
-        const io = getSocketIO();
-        io.to('emergency-responders').emit('emergency:new', emergency);
-      } catch {}
       return sendSuccess(res, emergency, 'Emergency dispatch alert sent', 201);
     } catch (error) {
       return next(error);
@@ -41,12 +39,10 @@ export class MedicalController {
 
   async updateEmergencyStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const updated = await medicalService.updateEmergencyStatus(req.params.id, req.body.status, req.body.responderId);
-      try {
-        const io = getSocketIO();
-        io.to('emergency-responders').emit('emergency:status_changed', updated);
-        io.to(`emergency-user-${updated.userId}`).emit('emergency:status_changed', updated);
-      } catch {}
+      const updated = await medicalService.updateEmergencyStatus(req.params.id, req.body.status, req.body.responderId, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+      });
       return sendSuccess(res, updated, 'Emergency status updated');
     } catch (error) {
       return next(error);
@@ -83,10 +79,10 @@ export class MedicalController {
     }
   }
 
-  async deleteMedicine(req: Request, res: Response, next: NextFunction) {
+  async archiveMedicine(req: Request, res: Response, next: NextFunction) {
     try {
-      await medicalService.deleteMedicine(req.params.id);
-      return sendSuccess(res, null, 'Medicine item deleted');
+      await medicalService.archiveMedicine(req.params.id);
+      return sendSuccess(res, null, 'Medicine item removed from the catalog');
     } catch (error) {
       return next(error);
     }
@@ -96,8 +92,10 @@ export class MedicalController {
     try {
       const isStaff = req.user?.role === Role.MEDICAL_STAFF || req.user?.role === Role.ADMIN;
       const userId = isStaff && req.query.all === 'true' ? undefined : req.user?.userId;
-      const data = await medicalService.getMedicineOrders(userId);
-      return sendSuccess(res, data, 'Medicine orders retrieved');
+      const { skip, take, page, limit } = getPagination(req);
+
+      const { orders, total } = await medicalService.getMedicineOrders({ userId, skip, take });
+      return sendSuccess(res, orders, 'Medicine orders retrieved', 200, buildMeta(page, limit, total));
     } catch (error) {
       return next(error);
     }
@@ -114,7 +112,7 @@ export class MedicalController {
 
   async updateMedicineOrderStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const updated = await medicalService.updateMedicineOrderStatus(req.params.id, req.body.status as MedicineOrderStatus);
+      const updated = await medicalService.updateMedicineOrderStatus(req.params.id, req.body.status);
       return sendSuccess(res, updated, 'Medicine order status updated');
     } catch (error) {
       return next(error);
@@ -126,8 +124,10 @@ export class MedicalController {
     try {
       const isStaff = req.user?.role === Role.MEDICAL_STAFF || req.user?.role === Role.ADMIN;
       const userId = isStaff && req.query.all === 'true' ? undefined : req.user?.userId;
-      const data = await medicalService.getConsultations(userId);
-      return sendSuccess(res, data, 'Consultation requests retrieved');
+      const { skip, take, page, limit } = getPagination(req);
+
+      const { consultations, total } = await medicalService.getConsultations({ userId, skip, take });
+      return sendSuccess(res, consultations, 'Consultation requests retrieved', 200, buildMeta(page, limit, total));
     } catch (error) {
       return next(error);
     }
@@ -144,7 +144,11 @@ export class MedicalController {
 
   async updateConsultationStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const updated = await medicalService.updateConsultationStatus(req.params.id, req.body.status as ConsultationStatus, req.body.assignedTo);
+      const updated = await medicalService.updateConsultationStatus(
+        req.params.id,
+        req.body.status as ConsultationStatus,
+        req.body.assignedToId
+      );
       return sendSuccess(res, updated, 'Consultation status updated');
     } catch (error) {
       return next(error);

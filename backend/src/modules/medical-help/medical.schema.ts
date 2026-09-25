@@ -3,18 +3,19 @@ import { EmergencyStatus, EmergencyTag, MedicineCategory, MedicineOrderStatus, C
 
 export const triggerEmergencySchema = z.object({
   body: z.object({
-    latitude: z.number(),
-    longitude: z.number(),
-    buildingId: z.string().optional(),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    buildingId: z.string().uuid().optional(),
+    locationDetail: z.string().max(200).optional(),
     tag: z.nativeEnum(EmergencyTag).default(EmergencyTag.OTHER),
-    description: z.string().optional(),
+    description: z.string().max(1000).optional(),
   }),
 });
 
 export const updateEmergencyStatusSchema = z.object({
   body: z.object({
     status: z.nativeEnum(EmergencyStatus),
-    responderId: z.string().optional(),
+    responderId: z.string().uuid().optional(),
   }),
 });
 
@@ -27,6 +28,19 @@ export const createMedicineSchema = z.object({
     stock: z.number().int().min(0).default(50),
     requiresPrescription: z.boolean().default(false),
     imageUrl: z.string().url().optional(),
+  }),
+});
+
+export const updateMedicineSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).optional(),
+    category: z.nativeEnum(MedicineCategory).optional(),
+    price: z.number().positive().optional(),
+    description: z.string().optional(),
+    stock: z.number().int().min(0).optional(),
+    requiresPrescription: z.boolean().optional(),
+    imageUrl: z.string().url().optional(),
+    isArchived: z.boolean().optional(),
   }),
 });
 
@@ -61,6 +75,6 @@ export const requestConsultationSchema = z.object({
 export const updateConsultationSchema = z.object({
   body: z.object({
     status: z.nativeEnum(ConsultationStatus),
-    assignedTo: z.string().optional(),
+    assignedToId: z.string().uuid().optional(),
   }),
 });

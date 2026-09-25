@@ -6,24 +6,25 @@ import {
   triggerEmergencySchema,
   updateEmergencyStatusSchema,
   createMedicineSchema,
+  updateMedicineSchema,
   createMedicineOrderSchema,
   updateMedicineOrderStatusSchema,
   requestConsultationSchema,
   updateConsultationSchema,
 } from './medical.schema';
 import { Role } from '@prisma/client';
+import { emergencyLimiter } from '../../middleware/rateLimiter';
 
 const router = Router();
 
 router.use(authenticate);
 
 // Emergency Track
-router.post('/emergencies/trigger', validate(triggerEmergencySchema), medicalController.triggerEmergency);
+router.post('/emergencies/trigger', emergencyLimiter, validate(triggerEmergencySchema), medicalController.triggerEmergency);
 router.get('/emergencies/active', requireRoles(Role.MEDICAL_STAFF, Role.AMBULANCE_RESPONDER, Role.ADMIN), medicalController.getActiveEmergencies);
 router.get('/emergencies', medicalController.getAllEmergencies);
 router.patch(
   '/emergencies/:id/status',
-  requireRoles(Role.MEDICAL_STAFF, Role.AMBULANCE_RESPONDER, Role.ADMIN),
   validate(updateEmergencyStatusSchema),
   medicalController.updateEmergencyStatus
 );
@@ -31,8 +32,8 @@ router.patch(
 // Medicine Store Track
 router.get('/medicines', medicalController.getMedicines);
 router.post('/medicines', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), validate(createMedicineSchema), medicalController.createMedicine);
-router.patch('/medicines/:id', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), medicalController.updateMedicine);
-router.delete('/medicines/:id', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), medicalController.deleteMedicine);
+router.patch('/medicines/:id', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), validate(updateMedicineSchema), medicalController.updateMedicine);
+router.delete('/medicines/:id', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), medicalController.archiveMedicine);
 
 router.get('/medicine-orders', medicalController.getMedicineOrders);
 router.post('/medicine-orders', validate(createMedicineOrderSchema), medicalController.createMedicineOrder);
