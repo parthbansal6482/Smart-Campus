@@ -40,3 +40,15 @@ export class ConflictError extends AppError {
     super(message, 409);
   }
 }
+
+export class LockedError extends AppError {
+  constructor(message = 'Account temporarily locked') {
+    super(message, 423);
+  }
+}
+
+export class TooManyRequestsError extends AppError {
+  constructor(message = 'Too many requests') {
+    super(message, 429);
+  }
+}
