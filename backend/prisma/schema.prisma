@@ -37,6 +37,7 @@ enum EmergencyTag {
   FAINTED
   INJURY
   ALLERGIC_REACTION
+  BREATHING
   OTHER
 }
 
@@ -92,32 +93,119 @@ enum MenuCategory {
   SPECIAL
 }
 
+enum NotificationType {
+  EMERGENCY
+  BOOKING
+  ORDER
+  MEDICINE_ORDER
+  CONSULTATION
+  SYSTEM
+}
+
 // -------------------------------------------------------------
 // USER & SHARED AUTH
 // -------------------------------------------------------------
 model User {
-  id           String        @id @default(uuid())
-  name         String
-  email        String        @unique
-  passwordHash String        @map("password_hash")
-  role         Role          @default(STUDENT)
-  phone        String?
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  id                  String        @id @default(uuid())
+  name                String
+  email               String        @unique
+  passwordHash        String        @map("password_hash")
+  role                Role          @default(STUDENT)
+  phone               String?
+  isActive            Boolean       @default(true) @map("is_active")
+  expoPushToken       String?       @map("expo_push_token")
+  failedLoginAttempts Int           @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?     @map("locked_until")
+  lastLoginAt         DateTime?     @map("last_login_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
-  bookings          Booking[]
-  emergencies       Emergency[]
-  medicineOrders    MedicineOrder[]
-  consultations     Consultation[]
-  orders            Order[]
+  bookings            Booking[]
+  emergencies         Emergency[]        @relation("EmergencyReporter")
+  respondedEmergencies Emergency[]       @relation("EmergencyResponder")
+  medicineOrders      MedicineOrder[]
+  consultations       Consultation[]     @relation("ConsultationRequester")
+  assignedConsultations Consultation[]   @relation("ConsultationAssignee")
+  orders              Order[]
+  notifications       Notification[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
 
   @@index([email])
   @@index([role])
   @@map("users")
 }
 
+// A single-use, revocable refresh token. Storing only the hash means a
+// leaked database dump can't be replayed as a login session.
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Persisted in-app notification feed, delivered live over a socket to the
+// owning user and (if a push token is on file) via Expo push.
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+// Append-only trail for actions that change safety- or access-critical
+// state (role changes, emergency status, booking cancellations, ...).
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
 // -------------------------------------------------------------
-// MODULE 1: CLASSROOM MANAGEMENT (LOGIC PRESERVED)
+// MODULE 1: CLASSROOM MANAGEMENT
 // -------------------------------------------------------------
 model Building {
   id          String      @id @default(uuid())
@@ -147,11 +235,30 @@ model Room {
 
   building     Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   bookings     Booking[]
+  schedules    ClassSchedule[]
 
   @@unique([buildingId, roomNumber])
   @@index([buildingId])
   @@index([isOccupied])
   @@map("rooms")
+}
+
+// A recurring, timetabled class. Distinct from Booking (one-off reservations
+// students/faculty make themselves) so the "is this room free" search can
+// account for standing lectures without anyone booking around them.
+model ClassSchedule {
+  id          String   @id @default(uuid())
+  roomId      String   @map("room_id")
+  dayOfWeek   Int      @map("day_of_week") // 0 = Sunday ... 6 = Saturday
+  startMinute Int      @map("start_minute") // minutes after midnight
+  endMinute   Int      @map("end_minute")
+  courseName  String?  @map("course_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, dayOfWeek])
+  @@map("class_schedules")
 }
 
 model Booking {
@@ -174,23 +281,26 @@ model Booking {
 }
 
 // -------------------------------------------------------------
-// MODULE 2: MEDICAL HELP (EXPANDED)
+// MODULE 2: MEDICAL HELP
 // -------------------------------------------------------------
 model Emergency {
-  id          String          @id @default(uuid())
-  userId      String          @map("user_id")
-  latitude    Float
-  longitude   Float
-  buildingId  String?         @map("building_id")
-  tag         EmergencyTag    @default(OTHER)
-  description String?
-  status      EmergencyStatus @default(REPORTED)
-  responderId String?         @map("responder_id")
-  reportedAt  DateTime        @default(now()) @map("reported_at")
-  resolvedAt  DateTime?       @map("resolved_at")
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  latitude      Float
+  longitude     Float
+  buildingId    String?         @map("building_id")
+  locationDetail String?        @map("location_detail") // e.g. "Ground floor, near RTH-105"
+  tag           EmergencyTag    @default(OTHER)
+  description   String?
+  status        EmergencyStatus @default(REPORTED)
+  responderId   String?         @map("responder_id")
+  reportedAt    DateTime        @default(now()) @map("reported_at")
+  acknowledgedAt DateTime?      @map("acknowledged_at")
+  resolvedAt    DateTime?       @map("resolved_at")
 
-  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  building    Building?       @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  user          User            @relation("EmergencyReporter", fields: [userId], references: [id], onDelete: Cascade)
+  responder     User?           @relation("EmergencyResponder", fields: [responderId], references: [id], onDelete: SetNull)
+  building      Building?       @relation(fields: [buildingId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
@@ -207,16 +317,19 @@ model Medicine {
   stock                Int              @default(50)
   requiresPrescription Boolean          @default(false) @map("requires_prescription")
   imageUrl             String?          @map("image_url")
+  isArchived           Boolean          @default(false) @map("is_archived")
   createdAt            DateTime         @default(now()) @map("created_at")
 
   orderItems           MedicineOrderItem[]
 
   @@index([category])
+  @@index([isArchived])
   @@map("medicines")
 }
 
 model MedicineOrder {
   id                String              @id @default(uuid())
+  orderNumber       Int                 @unique @default(autoincrement()) @map("order_number")
   userId            String              @map("user_id")
   totalAmount       Float               @map("total_amount")
   status            MedicineOrderStatus @default(PLACED)
@@ -241,22 +354,23 @@ model MedicineOrderItem {
   unitPrice       Float         @map("unit_price")
 
   medicineOrder   MedicineOrder @relation(fields: [medicineOrderId], references: [id], onDelete: Cascade)
-  medicine        Medicine      @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  medicine        Medicine      @relation(fields: [medicineId], references: [id], onDelete: Restrict)
 
   @@map("medicine_order_items")
 }
 
 model Consultation {
-  id          String             @id @default(uuid())
-  userId      String             @map("user_id")
-  type        ConsultationType   @default(CALLBACK)
-  status      ConsultationStatus @default(REQUESTED)
-  slotTime    DateTime?          @map("slot_time")
-  note        String?
-  assignedTo  String?            @map("assigned_to")
-  createdAt   DateTime           @default(now()) @map("created_at")
+  id           String             @id @default(uuid())
+  userId       String             @map("user_id")
+  type         ConsultationType   @default(CALLBACK)
+  status       ConsultationStatus @default(REQUESTED)
+  slotTime     DateTime?          @map("slot_time")
+  note         String?
+  assignedToId String?            @map("assigned_to_id")
+  createdAt    DateTime           @default(now()) @map("created_at")
 
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User               @relation("ConsultationRequester", fields: [userId], references: [id], onDelete: Cascade)
+  assignedTo   User?              @relation("ConsultationAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
@@ -264,7 +378,7 @@ model Consultation {
 }
 
 // -------------------------------------------------------------
-// MODULE 3: CAFETERIA FOOD ORDERING (EXPANDED)
+// MODULE 3: CAFETERIA FOOD ORDERING
 // -------------------------------------------------------------
 model MenuItem {
   id          String       @id @default(uuid())
@@ -276,6 +390,7 @@ model MenuItem {
   spiceLevel  Int          @default(0) @map("spice_level")
   rating      Float        @default(4.5)
   isAvailable Boolean      @default(true) @map("is_available")
+  isArchived  Boolean      @default(false) @map("is_archived")
   imageUrl    String?      @map("image_url")
   createdAt   DateTime     @default(now()) @map("created_at")
 
@@ -284,15 +399,19 @@ model MenuItem {
   @@index([category])
   @@index([isVeg])
   @@index([isAvailable])
+  @@index([isArchived])
   @@map("menu_items")
 }
 
 model Order {
   id          String      @id @default(uuid())
+  orderNumber Int         @unique @default(autoincrement()) @map("order_number")
   userId      String      @map("user_id")
   orderType   OrderType   @default(PICKUP) @map("order_type")
   tableNumber String?     @map("table_number")
-  orderToken  String      @map("order_token")
+  orderToken  String      @unique @map("order_token")
+  offerCode   String?     @map("offer_code")
+  discountAmount Float    @default(0) @map("discount_amount")
   status      OrderStatus @default(PLACED)
   pickupTime  DateTime?   @map("pickup_time")
   totalAmount Float       @map("total_amount")
@@ -317,21 +436,22 @@ model OrderItem {
   unitPrice  Float    @map("unit_price")
 
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@map("order_items")
 }
 
 model Offer {
-  id             String   @id @default(uuid())
-  title          String
-  description    String?
-  code           String   @unique
-  discountPercent Float   @map("discount_percent")
-  isBanner       Boolean  @default(true) @map("is_banner")
-  imageUrl       String?  @map("image_url")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  code            String   @unique
+  discountPercent Float    @map("discount_percent")
+  isBanner        Boolean  @default(true) @map("is_banner")
+  isActive        Boolean  @default(true) @map("is_active")
+  imageUrl        String?  @map("image_url")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   @@map("offers")
 }

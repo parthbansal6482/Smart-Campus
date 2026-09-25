@@ -17,9 +17,23 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  // This script wipes every table before reseeding — refuse to run it
+  // against a production database, even by accident.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Refusing to run the destructive seed script against NODE_ENV=production. ' +
+        'If you really mean it, run with NODE_ENV=development explicitly.'
+    );
+  }
+
   console.log('🌱 Starting database seed...');
 
   // 1. Clean existing records in reverse relation order
+  await prisma.auditLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.passwordResetToken.deleteMany();
+  await prisma.refreshToken.deleteMany();
+
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.menuItem.deleteMany();
@@ -31,6 +45,7 @@ async function main() {
   await prisma.consultation.deleteMany();
   await prisma.emergency.deleteMany();
 
+  await prisma.classSchedule.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.room.deleteMany();
   await prisma.building.deleteMany();
@@ -39,7 +54,7 @@ async function main() {
   console.log('🧹 Cleaned previous database records.');
 
   // 2. Hash default password
-  const passwordHash = await bcrypt.hash('Password@123', 10);
+  const passwordHash = await bcrypt.hash('Password@123', 12);
 
   // 3. Create Users for all roles
   const adminUser = await prisma.user.create({
@@ -160,6 +175,18 @@ async function main() {
     },
   });
 
+  // ENG-204 has a standing weekly lecture every Monday 09:00–10:30, so the
+  // "find a free room" search has a recurring-schedule conflict to exercise.
+  await prisma.classSchedule.create({
+    data: {
+      roomId: room204.id,
+      dayOfWeek: 1,
+      startMinute: 9 * 60,
+      endMinute: 10 * 60 + 30,
+      courseName: 'CS201: Data Structures',
+    },
+  });
+
   console.log('🏫 Created classroom module seed data.');
 
   // 5. Medical Help Module Data
@@ -169,10 +196,12 @@ async function main() {
       buildingId: sciBuilding.id,
       latitude: 37.7756,
       longitude: -122.4184,
+      locationDetail: 'Ground floor, Chemistry Lab 1',
       tag: EmergencyTag.INJURY,
       description: 'Lab minor chemical splash, first-aid required on Floor 1',
       status: EmergencyStatus.ASSIGNED,
       responderId: responderUser.id,
+      acknowledgedAt: new Date(),
     },
   });
 
@@ -278,18 +307,18 @@ async function main() {
   await prisma.offer.create({
     data: {
       title: 'Chef Special Combo 15% OFF',
-      description: 'Get Cold Brew Coffee + Chicken Panini for just \$11.40',
+      description: 'Get Cold Brew Coffee + Chicken Panini for 15% off',
       code: 'CAMPUS15',
       discountPercent: 15,
       isBanner: true,
     },
   });
 
-  await prisma.order.create({
+  const seedOrder = await prisma.order.create({
     data: {
       userId: studentUser.id,
       orderType: OrderType.PICKUP,
-      orderToken: '#ORD-104',
+      orderToken: 'PENDING',
       status: OrderStatus.PREPARING,
       totalAmount: 13.45,
       pickupTime: new Date(Date.now() + 1200000),
@@ -301,6 +330,12 @@ async function main() {
         ],
       },
     },
+  });
+  // orderToken is derived from the DB-assigned orderNumber, mirroring how
+  // cafeteria.service.ts generates it for real orders.
+  await prisma.order.update({
+    where: { id: seedOrder.id },
+    data: { orderToken: `#ORD-${String(seedOrder.orderNumber).padStart(4, '0')}` },
   });
 
   console.log('🍔 Created cafeteria module seed data.');
