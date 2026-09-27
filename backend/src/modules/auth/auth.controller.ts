@@ -1,11 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
-import { authService } from './auth.service';
+import { authService, SessionMeta } from './auth.service';
 import { sendSuccess } from '../../utils/response';
+
+const sessionMeta = (req: Request): SessionMeta => ({
+  userAgent: req.headers['user-agent'],
+  ipAddress: req.ip,
+});
 
 export class AuthController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await authService.register(req.body);
+      const result = await authService.register(req.body, sessionMeta(req));
       return sendSuccess(res, result, 'Account created successfully', 201);
     } catch (error) {
       return next(error);
@@ -14,7 +19,7 @@ export class AuthController {
 
   async login(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await authService.login(req.body);
+      const result = await authService.login(req.body, sessionMeta(req));
       return sendSuccess(res, result, 'Login successful');
     } catch (error) {
       return next(error);
@@ -23,7 +28,7 @@ export class AuthController {
 
   async refresh(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await authService.refresh(req.body.refreshToken);
+      const result = await authService.refresh(req.body.refreshToken, sessionMeta(req));
       return sendSuccess(res, result, 'Token refreshed');
     } catch (error) {
       return next(error);
@@ -43,6 +48,24 @@ export class AuthController {
     try {
       await authService.logoutAll(req.user!.userId);
       return sendSuccess(res, null, 'Logged out of all devices');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async listSessions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const sessions = await authService.listSessions(req.user!.userId);
+      return sendSuccess(res, sessions, 'Active sessions retrieved');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async revokeSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      await authService.revokeSession(req.user!.userId, req.params.id);
+      return sendSuccess(res, null, 'Session revoked');
     } catch (error) {
       return next(error);
     }

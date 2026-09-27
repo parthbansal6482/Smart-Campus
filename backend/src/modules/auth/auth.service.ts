@@ -3,7 +3,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '../../config/db';
 import { config } from '../../config';
 import { RegisterInput, LoginInput } from './auth.schema';
-import { ConflictError, ForbiddenError, LockedError, UnauthorizedError } from '../../utils/errors';
+import { ConflictError, ForbiddenError, LockedError, NotFoundError, UnauthorizedError } from '../../utils/errors';
 import { generateAccessToken } from '../../utils/jwt';
 import { generateOpaqueToken, hashToken } from '../../utils/secureTokens';
 import { sendEmail } from '../../services/email.service';
@@ -37,8 +37,13 @@ const parseRefreshTtlMs = (): number => {
   return value * unitMs;
 };
 
+export interface SessionMeta {
+  userAgent?: string;
+  ipAddress?: string;
+}
+
 export class AuthService {
-  private async issueTokenPair(user: { id: string; email: string; role: Role }) {
+  private async issueTokenPair(user: { id: string; email: string; role: Role }, meta?: SessionMeta) {
     const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
 
     const refreshToken = generateOpaqueToken();
@@ -47,13 +52,15 @@ export class AuthService {
         userId: user.id,
         tokenHash: hashToken(refreshToken),
         expiresAt: new Date(Date.now() + parseRefreshTtlMs()),
+        userAgent: meta?.userAgent,
+        ipAddress: meta?.ipAddress,
       },
     });
 
     return { accessToken, refreshToken };
   }
 
-  async register(input: RegisterInput) {
+  async register(input: RegisterInput, meta?: SessionMeta) {
     const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
     if (existingUser) {
       throw new ConflictError('A user with this email already exists');
@@ -73,13 +80,13 @@ export class AuthService {
       select: publicUserSelect,
     });
 
-    const tokens = await this.issueTokenPair(user);
+    const tokens = await this.issueTokenPair(user, meta);
     await recordAudit({ actorId: user.id, action: 'auth.register', targetType: 'User', targetId: user.id });
 
     return { user, ...tokens };
   }
 
-  async login(input: LoginInput) {
+  async login(input: LoginInput, meta?: SessionMeta) {
     const user = await prisma.user.findUnique({ where: { email: input.email } });
 
     // Same generic message whether the email doesn't exist or the password
@@ -119,7 +126,7 @@ export class AuthService {
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
     });
 
-    const tokens = await this.issueTokenPair(user);
+    const tokens = await this.issueTokenPair(user, meta);
 
     return {
       user: {
@@ -137,7 +144,7 @@ export class AuthService {
 
   /** Refresh-token rotation: the presented token is revoked and a new pair issued, so a stolen
    *  token can only ever be used once before the legitimate owner's next refresh invalidates it. */
-  async refresh(rawToken: string) {
+  async refresh(rawToken: string, meta?: SessionMeta) {
     const tokenHash = hashToken(rawToken);
     const record = await prisma.refreshToken.findUnique({ where: { tokenHash }, include: { user: true } });
 
@@ -151,7 +158,9 @@ export class AuthService {
 
     await prisma.refreshToken.update({ where: { id: record.id }, data: { revokedAt: new Date() } });
 
-    return this.issueTokenPair(record.user);
+    // Carries the session's identity (same device/browser) forward to the new
+    // token record, rather than losing it on every rotation.
+    return this.issueTokenPair(record.user, meta ?? { userAgent: record.userAgent ?? undefined, ipAddress: record.ipAddress ?? undefined });
   }
 
   async logout(rawToken?: string) {
@@ -164,6 +173,29 @@ export class AuthService {
 
   async logoutAll(userId: string) {
     await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+
+  /** Lists this user's active (non-revoked, non-expired) sessions — the "signed in on these
+   *  devices" view a user needs before they can revoke just one of them. */
+  async listSessions(userId: string) {
+    const sessions = await prisma.refreshToken.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true, userAgent: true, ipAddress: true, createdAt: true, lastUsedAt: true, expiresAt: true },
+      orderBy: { lastUsedAt: 'desc' },
+    });
+    return sessions;
+  }
+
+  /** Revokes one specific session by id. Scoped to the caller's own userId so a session id
+   *  can't be guessed to sign someone else out. */
+  async revokeSession(userId: string, sessionId: string) {
+    const result = await prisma.refreshToken.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (result.count === 0) {
+      throw new NotFoundError('Session not found');
+    }
   }
 
   async forgotPassword(email: string) {
