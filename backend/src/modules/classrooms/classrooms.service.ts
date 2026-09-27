@@ -169,6 +169,17 @@ export class ClassroomsService {
     return prisma.classSchedule.create({ data });
   }
 
+  async updateSchedule(
+    id: string,
+    data: Partial<{ dayOfWeek: number; startMinute: number; endMinute: number; courseName: string | null }>
+  ) {
+    const schedule = await prisma.classSchedule.findUnique({ where: { id } });
+    if (!schedule) {
+      throw new NotFoundError('Schedule entry not found');
+    }
+    return prisma.classSchedule.update({ where: { id }, data });
+  }
+
   async deleteSchedule(id: string) {
     const schedule = await prisma.classSchedule.findUnique({ where: { id } });
     if (!schedule) {

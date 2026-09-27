@@ -100,6 +100,15 @@ export class ClassroomsController {
     }
   }
 
+  async updateSchedule(req: Request, res: Response, next: NextFunction) {
+    try {
+      const schedule = await classroomsService.updateSchedule(req.params.id, req.body);
+      return sendSuccess(res, schedule, 'Schedule updated successfully');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
   async deleteSchedule(req: Request, res: Response, next: NextFunction) {
     try {
       await classroomsService.deleteSchedule(req.params.id);

@@ -10,6 +10,7 @@ import {
   createBookingSchema,
   updateBookingStatusSchema,
   createScheduleSchema,
+  updateScheduleSchema,
 } from './classrooms.schema';
 import { Role } from '@prisma/client';
 
@@ -31,6 +32,7 @@ router.patch('/rooms/:id/facilities', requireRoles(Role.ADMIN, Role.FACULTY), va
 // Recurring class schedules
 router.get('/schedules', classroomsController.getSchedules);
 router.post('/schedules', requireRoles(Role.ADMIN), validate(createScheduleSchema), classroomsController.createSchedule);
+router.patch('/schedules/:id', requireRoles(Role.ADMIN), validate(updateScheduleSchema), classroomsController.updateSchedule);
 router.delete('/schedules/:id', requireRoles(Role.ADMIN), classroomsController.deleteSchedule);
 
 // Bookings

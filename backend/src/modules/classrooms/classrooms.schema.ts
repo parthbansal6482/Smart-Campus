@@ -88,3 +88,17 @@ export const createScheduleSchema = z.object({
       path: ['endMinute'],
     }),
 });
+
+export const updateScheduleSchema = z.object({
+  body: z
+    .object({
+      dayOfWeek: z.number().int().min(0).max(6).optional(),
+      startMinute: z.number().int().min(0).max(1439).optional(),
+      endMinute: z.number().int().min(1).max(1440).optional(),
+      courseName: z.string().nullable().optional(),
+    })
+    .refine(s => s.startMinute === undefined || s.endMinute === undefined || s.startMinute < s.endMinute, {
+      message: 'startMinute must be before endMinute',
+      path: ['endMinute'],
+    }),
+});

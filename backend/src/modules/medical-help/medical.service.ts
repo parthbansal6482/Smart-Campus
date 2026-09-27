@@ -300,11 +300,42 @@ export class MedicalService {
     return order;
   }
 
-  async updateMedicineOrderStatus(id: string, status: MedicineOrderStatus) {
-    const order = await prisma.medicineOrder.update({
-      where: { id },
-      data: { status },
-      include: { user: true, items: { include: { medicine: true } } },
+  async updateMedicineOrderStatus(id: string, status: MedicineOrderStatus, actor: { userId: string; role: Role }) {
+    const existing = await prisma.medicineOrder.findUnique({ where: { id }, include: { items: true } });
+    if (!existing) throw new NotFoundError('Medicine order not found');
+
+    const isOwner = existing.userId === actor.userId;
+    const isStaff = actor.role === Role.MEDICAL_STAFF || actor.role === Role.ADMIN;
+
+    // Mirrors the cafeteria order pattern: a student can cancel their own
+    // order only while it's still just PLACED (nothing's been prepared
+    // yet); any other change, or a later-stage cancellation, is staff-only.
+    if (status === MedicineOrderStatus.CANCELLED) {
+      if (!isOwner && !isStaff) throw new ForbiddenError('You cannot cancel this order');
+      if (existing.status === MedicineOrderStatus.CANCELLED) {
+        throw new ConflictError('This order has already been cancelled');
+      }
+      if (isOwner && !isStaff && existing.status !== MedicineOrderStatus.PLACED) {
+        throw new ConflictError('This order is already being prepared and can no longer be cancelled by you — contact the pharmacy');
+      }
+    } else if (!isStaff) {
+      throw new ForbiddenError('Only medical staff can update this status');
+    }
+
+    const order = await prisma.$transaction(async tx => {
+      // Cancelling releases the stock this order had reserved, so it's
+      // available again instead of being lost.
+      if (status === MedicineOrderStatus.CANCELLED) {
+        for (const item of existing.items) {
+          await tx.medicine.update({ where: { id: item.medicineId }, data: { stock: { increment: item.quantity } } });
+        }
+      }
+
+      return tx.medicineOrder.update({
+        where: { id },
+        data: { status },
+        include: { user: true, items: { include: { medicine: true } } },
+      });
     });
 
     await notifyUser({

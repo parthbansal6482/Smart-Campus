@@ -37,7 +37,7 @@ router.delete('/medicines/:id', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), me
 
 router.get('/medicine-orders', medicalController.getMedicineOrders);
 router.post('/medicine-orders', validate(createMedicineOrderSchema), medicalController.createMedicineOrder);
-router.patch('/medicine-orders/:id/status', requireRoles(Role.MEDICAL_STAFF, Role.ADMIN), validate(updateMedicineOrderStatusSchema), medicalController.updateMedicineOrderStatus);
+router.patch('/medicine-orders/:id/status', validate(updateMedicineOrderStatusSchema), medicalController.updateMedicineOrderStatus);
 
 // Consultations & Talk to Staff Track
 router.get('/consultations', medicalController.getConsultations);

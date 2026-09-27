@@ -112,7 +112,10 @@ export class MedicalController {
 
   async updateMedicineOrderStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const updated = await medicalService.updateMedicineOrderStatus(req.params.id, req.body.status);
+      const updated = await medicalService.updateMedicineOrderStatus(req.params.id, req.body.status, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+      });
       return sendSuccess(res, updated, 'Medicine order status updated');
     } catch (error) {
       return next(error);
