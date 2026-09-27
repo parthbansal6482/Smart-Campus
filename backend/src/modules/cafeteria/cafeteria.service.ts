@@ -71,11 +71,50 @@ export class CafeteriaService {
 
   // Offers & Daily Specials
   async getOffers() {
-    return prisma.offer.findMany({ where: { isActive: true }, orderBy: { createdAt: 'desc' } });
+    return prisma.offer.findMany({
+      where: { isActive: true, OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }] },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  async createOffer(data: { title: string; description?: string; code: string; discountPercent: number; isBanner: boolean; imageUrl?: string }) {
-    return prisma.offer.create({ data });
+  async createOffer(data: {
+    title: string;
+    description?: string;
+    code: string;
+    discountPercent: number;
+    isBanner: boolean;
+    imageUrl?: string;
+    expiresAt?: string;
+    maxRedemptions?: number;
+  }) {
+    return prisma.offer.create({
+      data: { ...data, expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined },
+    });
+  }
+
+  async updateOffer(
+    id: string,
+    data: Partial<{
+      title: string;
+      description: string;
+      discountPercent: number;
+      isBanner: boolean;
+      isActive: boolean;
+      imageUrl: string;
+      expiresAt: string | null;
+      maxRedemptions: number | null;
+    }>
+  ) {
+    const offer = await prisma.offer.findUnique({ where: { id } });
+    if (!offer) throw new NotFoundError('Offer not found');
+
+    return prisma.offer.update({
+      where: { id },
+      data: {
+        ...data,
+        expiresAt: data.expiresAt === undefined ? undefined : data.expiresAt ? new Date(data.expiresAt) : null,
+      },
+    });
   }
 
   // Orders & Tokens
@@ -138,23 +177,40 @@ export class CafeteriaService {
       orderItemData.push({ menuItemId: dbItem.id, quantity, unitPrice: dbItem.price });
     }
 
-    let discountAmount = 0;
-    let appliedOfferCode: string | undefined;
-    if (data.offerCode) {
-      const offer = await prisma.offer.findUnique({ where: { code: data.offerCode.toUpperCase() } });
-      if (!offer || !offer.isActive) {
-        throw new BadRequestError('This offer code is not valid');
-      }
-      discountAmount = Math.round(subtotal * (offer.discountPercent / 100) * 100) / 100;
-      appliedOfferCode = offer.code;
-    }
-
-    const totalAmount = Math.max(0, subtotal - discountAmount);
-
     // orderNumber is a DB-generated autoincrement, so the human-readable
     // token derived from it can never collide the way a random 3-digit
     // suffix could.
     const order = await prisma.$transaction(async tx => {
+      let discountAmount = 0;
+      let appliedOfferCode: string | undefined;
+
+      if (data.offerCode) {
+        // Atomically validate-and-increment in one statement: a plain
+        // read-then-write would let two concurrent orders both see
+        // "1 redemption left" and both succeed, letting a limited offer be
+        // used more times than intended. The conditional UPDATE only
+        // matches (and only then increments) a row that is still active,
+        // unexpired, and under its redemption limit.
+        const redeemed = await tx.$queryRaw<Array<{ code: string; discount_percent: number }>>`
+          UPDATE offers
+          SET redemption_count = redemption_count + 1
+          WHERE code = ${data.offerCode.toUpperCase()}
+            AND is_active = true
+            AND (expires_at IS NULL OR expires_at >= now())
+            AND (max_redemptions IS NULL OR redemption_count < max_redemptions)
+          RETURNING code, discount_percent
+        `;
+
+        if (redeemed.length === 0) {
+          throw new BadRequestError('This offer code is invalid, expired, or has reached its usage limit');
+        }
+
+        discountAmount = Math.round(subtotal * (redeemed[0].discount_percent / 100) * 100) / 100;
+        appliedOfferCode = redeemed[0].code;
+      }
+
+      const totalAmount = Math.max(0, subtotal - discountAmount);
+
       const created = await tx.order.create({
         data: {
           userId,

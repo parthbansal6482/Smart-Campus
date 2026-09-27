@@ -73,6 +73,15 @@ export class CafeteriaController {
     }
   }
 
+  async updateOffer(req: Request, res: Response, next: NextFunction) {
+    try {
+      const offer = await cafeteriaService.updateOffer(req.params.id, req.body);
+      return sendSuccess(res, offer, 'Offer updated');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
   async getOrders(req: Request, res: Response, next: NextFunction) {
     try {
       const isStaffOrAdmin = req.user?.role === Role.CAFETERIA_STAFF || req.user?.role === Role.ADMIN;

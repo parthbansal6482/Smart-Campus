@@ -61,5 +61,22 @@ export const createOfferSchema = z.object({
     discountPercent: z.number().min(1).max(100),
     isBanner: z.boolean().default(true),
     imageUrl: z.string().url().optional(),
+    // Both optional: omitting either means "never expires" / "unlimited uses",
+    // matching the previous unconditional behaviour.
+    expiresAt: z.string().datetime().optional(),
+    maxRedemptions: z.number().int().positive().optional(),
+  }),
+});
+
+export const updateOfferSchema = z.object({
+  body: z.object({
+    title: z.string().min(2).optional(),
+    description: z.string().optional(),
+    discountPercent: z.number().min(1).max(100).optional(),
+    isBanner: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    imageUrl: z.string().url().optional(),
+    expiresAt: z.string().datetime().nullable().optional(),
+    maxRedemptions: z.number().int().positive().nullable().optional(),
   }),
 });

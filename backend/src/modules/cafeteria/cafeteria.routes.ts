@@ -8,6 +8,7 @@ import {
   createOrderSchema,
   updateOrderStatusSchema,
   createOfferSchema,
+  updateOfferSchema,
 } from './cafeteria.schema';
 import { Role } from '@prisma/client';
 
@@ -27,6 +28,7 @@ router.patch('/menu/:id', requireRoles(Role.CAFETERIA_STAFF, Role.ADMIN), valida
 router.delete('/menu/:id', requireRoles(Role.CAFETERIA_STAFF, Role.ADMIN), cafeteriaController.archiveMenuItem);
 
 router.post('/offers', requireRoles(Role.CAFETERIA_STAFF, Role.ADMIN), validate(createOfferSchema), cafeteriaController.createOffer);
+router.patch('/offers/:id', requireRoles(Role.CAFETERIA_STAFF, Role.ADMIN), validate(updateOfferSchema), cafeteriaController.updateOffer);
 
 // Orders
 router.get('/orders', cafeteriaController.getOrders);
