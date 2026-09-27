@@ -14,6 +14,7 @@ import { medicalRoutes } from './modules/medical-help/medical.routes';
 import { cafeteriaRoutes } from './modules/cafeteria/cafeteria.routes';
 import { notificationRoutes } from './modules/notifications/notifications.routes';
 import { uploadRoutes } from './modules/uploads/uploads.routes';
+import { auditRoutes } from './modules/audit/audit.routes';
 import { sendSuccess } from './utils/response';
 import { NotFoundError } from './utils/errors';
 import { config } from './config';
@@ -111,6 +112,7 @@ export const createApp = (): Application => {
   app.use('/api/v1/cafeteria', cafeteriaRoutes);
   app.use('/api/v1/notifications', notificationRoutes);
   app.use('/api/v1/uploads', uploadRoutes);
+  app.use('/api/v1/audit-logs', auditRoutes);
 
   // 404 handler
   app.use('*', (req: Request, res: Response, next) => {
