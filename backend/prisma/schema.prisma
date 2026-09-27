@@ -143,6 +143,11 @@ model RefreshToken {
   id         String    @id @default(uuid())
   userId     String    @map("user_id")
   tokenHash  String    @unique @map("token_hash")
+  // Captured at issue time so a user can recognize ("Chrome on Mac", "iPhone app")
+  // and individually revoke one session from a list of their active ones.
+  userAgent  String?   @map("user_agent")
+  ipAddress  String?   @map("ip_address")
+  lastUsedAt DateTime  @default(now()) @map("last_used_at")
   expiresAt  DateTime  @map("expires_at")
   revokedAt  DateTime? @map("revoked_at")
   createdAt  DateTime  @default(now()) @map("created_at")
@@ -443,15 +448,20 @@ model OrderItem {
 }
 
 model Offer {
-  id              String   @id @default(uuid())
-  title           String
-  description     String?
-  code            String   @unique
-  discountPercent Float    @map("discount_percent")
-  isBanner        Boolean  @default(true) @map("is_banner")
-  isActive        Boolean  @default(true) @map("is_active")
-  imageUrl        String?  @map("image_url")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String    @id @default(uuid())
+  title            String
+  description      String?
+  code             String    @unique
+  discountPercent  Float     @map("discount_percent")
+  isBanner         Boolean   @default(true) @map("is_banner")
+  isActive         Boolean   @default(true) @map("is_active")
+  imageUrl         String?   @map("image_url")
+  // Both optional: an offer with neither never expires and can be redeemed
+  // any number of times, matching the old unconditional behaviour.
+  expiresAt        DateTime? @map("expires_at")
+  maxRedemptions   Int?      @map("max_redemptions")
+  redemptionCount  Int       @default(0) @map("redemption_count")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
   @@map("offers")
 }
