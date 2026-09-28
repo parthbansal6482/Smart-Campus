@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
 import { authService } from '../services/auth.service';
 import { tokenStorage, setUnauthorizedHandler, USER_STORAGE_KEY } from '../services/api';
+import { registerForPushNotifications, unregisterPushNotifications } from '../services/pushNotifications';
 
 interface AuthState {
   user: User | null;
@@ -27,6 +28,7 @@ export const useAuthStore = create<AuthState>(set => ({
       ]);
       if (token && userStr) {
         set({ user: JSON.parse(userStr), isAuthenticated: true, isLoading: false });
+        registerForPushNotifications();
       } else {
         set({ user: null, isAuthenticated: false, isLoading: false });
       }
@@ -42,6 +44,7 @@ export const useAuthStore = create<AuthState>(set => ({
       await tokenStorage.setTokens(accessToken, refreshToken);
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
+      registerForPushNotifications();
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -55,6 +58,7 @@ export const useAuthStore = create<AuthState>(set => ({
       await tokenStorage.setTokens(accessToken, refreshToken);
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
+      registerForPushNotifications();
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -63,6 +67,7 @@ export const useAuthStore = create<AuthState>(set => ({
 
   logout: async () => {
     const refreshToken = await tokenStorage.getRefreshToken();
+    await unregisterPushNotifications();
     await tokenStorage.clear();
     set({ user: null, isAuthenticated: false });
     await authService.logout(refreshToken);
