@@ -22,6 +22,9 @@ const startServer = async () => {
       logger.info(`🌐 REST API base URL: http://localhost:${config.port}/api/v1`);
       logger.info(`🔌 WebSocket server attached and listening on ws://localhost:${config.port}`);
       logger.info(`📖 API docs: http://localhost:${config.port}/docs`);
+      if (config.isProduction && !config.smtp.configured) {
+        logger.warn('⚠️  No SMTP configured — password-reset emails will only be logged, never delivered.');
+      }
     });
 
     let shuttingDown = false;

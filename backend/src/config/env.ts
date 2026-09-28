@@ -69,6 +69,10 @@ const envSchema = z
     message: 'JWT_SECRET must be set explicitly in production — refusing to start with a fallback secret.',
     path: ['JWT_SECRET'],
   })
+  .refine(data => !(data.NODE_ENV === 'production' && !data.CORS_ORIGINS?.trim()), {
+    message: 'CORS_ORIGINS must list your real deployed domain(s) in production — refusing to start with the "allow any origin" dev fallback.',
+    path: ['CORS_ORIGINS'],
+  })
   .refine(data => data.STORAGE_DRIVER !== 's3' || (data.S3_BUCKET && data.S3_REGION && data.S3_ACCESS_KEY_ID && data.S3_SECRET_ACCESS_KEY), {
     message: 'STORAGE_DRIVER=s3 requires S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY.',
     path: ['STORAGE_DRIVER'],
