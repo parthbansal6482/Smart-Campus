@@ -19,6 +19,7 @@ tags:
   - name: Cafeteria
   - name: Notifications
   - name: Uploads
+  - name: Audit
 
 components:
   securitySchemes:
@@ -280,6 +281,27 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
 
+  /auth/sessions:
+    get:
+      tags: [Auth]
+      summary: List the current user's active sessions (device/browser refresh tokens)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revoke one of the current user's sessions
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Session revoked }
+        '404': { description: "No active session with that id belongs to the caller" }
+
   /users:
     get:
       tags: [Users]
@@ -419,6 +441,34 @@ paths:
       responses:
         '201': { description: Created }
 
+  /classrooms/schedules/{id}:
+    patch:
+      tags: [Classrooms]
+      summary: Update a recurring class schedule (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dayOfWeek: { type: integer, minimum: 0, maximum: 6 }
+                startMinute: { type: integer, minimum: 0, maximum: 1439 }
+                endMinute: { type: integer, minimum: 1, maximum: 1440 }
+                courseName: { type: string, nullable: true }
+      responses:
+        '200': { description: Updated }
+        '400': { description: startMinute must be before endMinute }
+        '403': { description: Non-admin caller }
+    delete:
+      tags: [Classrooms]
+      summary: Delete a recurring class schedule (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Deleted }
+
   /classrooms/bookings:
     get:
       tags: [Classrooms]
@@ -515,6 +565,18 @@ paths:
         '201': { description: Ordered }
         '409': { description: One or more items are out of stock }
 
+  /medical-help/medicine-orders/{id}/status:
+    patch:
+      tags: [Medical Help]
+      summary: Update a medicine order's status
+      description: The owner may cancel their own order while it is still PLACED (stock is restored transactionally); medical staff/admin may set any status and cancel at any non-terminal point.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated }
+        '403': { description: "Non-owner attempting to cancel, or non-staff attempting a non-cancel transition" }
+        '409': { description: "Already cancelled, or past the owner-cancellable PLACED stage" }
+
   /cafeteria/menu:
     get:
       tags: [Cafeteria]
@@ -558,6 +620,50 @@ paths:
         '200': { description: OK }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /cafeteria/orders/{id}/status:
+    patch:
+      tags: [Cafeteria]
+      summary: Update a food order's status
+      description: The owner may cancel their own order while it is still PLACED; cafeteria staff/admin may set any status.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated }
+        '409': { description: No longer cancellable — already being prepared or later }
+
+  /cafeteria/offers:
+    get:
+      tags: [Cafeteria]
+      summary: List active, unexpired offers
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Cafeteria]
+      summary: Create an offer (cafeteria staff/admin)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, code, discountPercent]
+              properties:
+                title: { type: string }
+                code: { type: string }
+                discountPercent: { type: number, minimum: 1, maximum: 100 }
+                expiresAt: { type: string, format: date-time, nullable: true }
+                maxRedemptions: { type: integer, minimum: 1, nullable: true }
+      responses:
+        '201': { description: Created }
+
+  /cafeteria/offers/{id}:
+    patch:
+      tags: [Cafeteria]
+      summary: Update an offer's title, discount, expiry, redemption limit, or active flag (cafeteria staff/admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated }
+
   /notifications:
     get:
       tags: [Notifications]
@@ -593,3 +699,24 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
         '400': { description: Missing file, wrong type, or file too large }
+
+  /audit-logs:
+    get:
+      tags: [Audit]
+      summary: List audit log entries (admin only, paginated)
+      description: Every sensitive action (auth, role changes, order/booking status changes, etc.) is recorded here with the acting user, action name, target, and metadata.
+      parameters:
+        - { name: action, in: query, schema: { type: string }, description: "Filter by action name (contains match, case-insensitive)" }
+        - { name: targetType, in: query, schema: { type: string } }
+        - { name: actorId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
