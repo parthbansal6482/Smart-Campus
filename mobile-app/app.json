@@ -29,7 +29,14 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Smart Campus to use your location for emergency dispatch."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#000000"
+        }
+      ]
     ]
   }
 }
