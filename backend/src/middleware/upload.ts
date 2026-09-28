@@ -1,25 +1,9 @@
-import fs from 'fs';
-import path from 'path';
 import multer from 'multer';
 import { Request } from 'express';
 import { config } from '../config';
 import { BadRequestError } from '../utils/errors';
 
-const uploadRoot = path.resolve(process.cwd(), config.upload.dir);
-if (!fs.existsSync(uploadRoot)) {
-  fs.mkdirSync(uploadRoot, { recursive: true });
-}
-
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadRoot),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const safeName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, safeName);
-  },
-});
 
 const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
@@ -28,11 +12,14 @@ const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFil
   cb(null, true);
 };
 
-/** Single-file upload for a `file` field. Used for prescription uploads etc. */
+/**
+ * Single-file upload for a `file` field, buffered in memory rather than
+ * written straight to disk — storage.service then decides whether those
+ * bytes land on local disk or in an S3-compatible bucket, based on
+ * STORAGE_DRIVER, without multer needing to know which.
+ */
 export const uploadSingleFile = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: config.upload.maxBytes },
 }).single('file');
-
-export const publicUploadUrl = (filename: string): string => `${config.appBaseUrl}/uploads/${filename}`;

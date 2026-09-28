@@ -35,6 +35,19 @@ export const config = {
     maxBytes: env.MAX_UPLOAD_MB * 1024 * 1024,
   },
 
+  storage: {
+    driver: env.STORAGE_DRIVER,
+    s3: {
+      bucket: env.S3_BUCKET,
+      region: env.S3_REGION,
+      endpoint: env.S3_ENDPOINT,
+      accessKeyId: env.S3_ACCESS_KEY_ID,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+      forcePathStyle: env.S3_FORCE_PATH_STYLE,
+      publicBaseUrl: env.S3_PUBLIC_BASE_URL,
+    },
+  },
+
   smtp: {
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
