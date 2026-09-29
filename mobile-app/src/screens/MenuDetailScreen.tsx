@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
-import { MENU } from '../data/mock';
 import { useCartStore } from '../store/cartStore';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -16,7 +15,7 @@ const SPICE = ['Not spicy', 'Mild', 'Medium', 'Hot'];
 export const MenuDetailScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, 'MenuDetail'>>();
-  const item = route.params?.item ?? MENU[0];
+  const item = route.params.item;
   const { lines, add, setQuantity } = useCartStore();
 
   const inCart = lines.find(l => l.item.id === item.id)?.quantity ?? 0;

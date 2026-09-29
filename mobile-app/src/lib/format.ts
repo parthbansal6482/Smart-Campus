@@ -31,3 +31,8 @@ export const initials = (name?: string) =>
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase())
     .join('');
+
+export const getErrorMessage = (error: unknown, fallback = 'Something went wrong. Please try again.') => {
+  const maybe = error as { response?: { data?: { message?: string } } };
+  return maybe?.response?.data?.message || fallback;
+};

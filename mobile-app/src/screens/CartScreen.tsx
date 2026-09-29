@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ShoppingBag } from 'lucide-react-native';
 import { RootStackParamList } from '../types';
 import { useCartStore, cartTotal } from '../store/cartStore';
+import { cafeteriaService } from '../services/cafeteria.service';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Chips, Segmented } from '../components/Chips';
@@ -12,7 +13,7 @@ import { Field } from '../components/Field';
 import { Screen, SectionLabel, StickyFooter } from '../components/Screen';
 import { EmptyState, Stepper, VegMark } from '../components/Bits';
 import { colors, radius, spacing } from '../theme';
-import { formatCurrency, formatTime } from '../lib/format';
+import { formatCurrency, formatTime, getErrorMessage } from '../lib/format';
 
 const pickupOptions = () => {
   const now = new Date();
@@ -26,7 +27,7 @@ const pickupOptions = () => {
 
 export const CartScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { lines, setQuantity, placeOrder } = useCartStore();
+  const { lines, setQuantity, clear } = useCartStore();
 
   const slots = useMemo(pickupOptions, []);
   const [orderType, setOrderType] = useState<'PICKUP' | 'DINE_IN'>('PICKUP');
@@ -36,17 +37,22 @@ export const CartScreen: React.FC = () => {
 
   const total = cartTotal(lines);
 
-  const handlePlace = () => {
+  const handlePlace = async () => {
     setPlacing(true);
-    setTimeout(() => {
-      const order = placeOrder({
+    try {
+      const order = await cafeteriaService.placeOrder({
         orderType,
         pickupTime: orderType === 'PICKUP' ? pickupTime : undefined,
         note: note.trim() || undefined,
+        items: lines.map(l => ({ menuItemId: l.item.id, quantity: l.quantity })),
       });
-      setPlacing(false);
+      clear();
       navigation.replace('Orders', { placedOrderId: order.id });
-    }, 600);
+    } catch (error) {
+      Alert.alert('Could not place order', getErrorMessage(error));
+    } finally {
+      setPlacing(false);
+    }
   };
 
   if (lines.length === 0) {

@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
-import { ROOMS } from '../data/mock';
+import { classroomService } from '../services/classroom.service';
+import { getErrorMessage } from '../lib/format';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -29,7 +30,7 @@ const slotLabel = (hour: number) => formatTime(new Date(2000, 0, 1, hour));
 export const BookRoomScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, 'BookRoom'>>();
-  const room = route.params?.room ?? ROOMS[0];
+  const room = route.params?.room;
 
   const days = useMemo(dayOptions, []);
   const currentHour = new Date().getHours();
@@ -50,19 +51,45 @@ export const BookRoomScreen: React.FC = () => {
   const dayLabel = days.find(d => d.value === day)?.label;
   const summary = `${dayLabel}, ${slotLabel(startHour)} – ${slotLabel(endHour)}`;
 
-  const handleBook = () => {
+  const handleBook = async () => {
+    if (!room) return;
     if (!purpose.trim()) {
       Alert.alert('Add a purpose', 'A short note like “Group study” helps others know why the room is taken.');
       return;
     }
+
+    const startTime = new Date();
+    startTime.setDate(startTime.getDate() + Number(day));
+    startTime.setHours(startHour, 0, 0, 0);
+    const endTime = new Date(startTime.getTime() + Number(duration) * 3600_000);
+
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await classroomService.createBooking({
+        roomId: room.id,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        purpose: purpose.trim(),
+      });
       Alert.alert('Room booked', `${room.roomNumber} is yours ${summary.toLowerCase()}.`, [
         { text: 'Done', onPress: () => navigation.goBack() },
       ]);
-    }, 600);
+    } catch (error) {
+      Alert.alert('Could not book this room', getErrorMessage(error, 'That slot may have just been taken — try another time.'));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (!room) {
+    return (
+      <Screen>
+        <AppText variant="body" tone="ink3">
+          No room selected.
+        </AppText>
+      </Screen>
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { DoorOpen, Search } from 'lucide-react-native';
-import { ROOMS, RoomListing } from '../data/mock';
-import { RootStackParamList } from '../types';
+import { classroomService } from '../services/classroom.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
+import { Room, RootStackParamList } from '../types';
 import { AppText } from '../components/AppText';
 import { Card } from '../components/Card';
 import { Chips } from '../components/Chips';
@@ -25,13 +26,27 @@ export const ClassroomsScreen: React.FC = () => {
   const [building, setBuilding] = useState('all');
   const [size, setSize] = useState<Size>('any');
   const [search, setSearch] = useState('');
+  const [allRooms, setAllRooms] = useState<Room[]>([]);
 
-  const buildingOptions = useMemo(() => {
-    const codes = Array.from(new Set(ROOMS.map(r => r.building?.code).filter(Boolean))) as string[];
-    return [{ value: 'all', label: 'All buildings' }, ...codes.map(code => ({ value: code, label: code }))];
+  const loadRooms = useCallback(async () => {
+    try {
+      setAllRooms(await classroomService.getRooms());
+    } catch {
+      /* keep last known list */
+    }
   }, []);
 
-  const rooms = ROOMS.filter(room => {
+  useEffect(() => {
+    loadRooms();
+    return realtimeEvents.on(REALTIME_EVENTS.classroomsChanged, loadRooms);
+  }, [loadRooms]);
+
+  const buildingOptions = useMemo(() => {
+    const codes = Array.from(new Set(allRooms.map(r => r.building?.code).filter(Boolean))) as string[];
+    return [{ value: 'all', label: 'All buildings' }, ...codes.map(code => ({ value: code, label: code }))];
+  }, [allRooms]);
+
+  const rooms = allRooms.filter(room => {
     if (availability === 'free' && room.isOccupied) return false;
     if (building !== 'all' && room.building?.code !== building) return false;
     if (size !== 'any' && room.capacity < Number(size)) return false;
@@ -42,10 +57,10 @@ export const ClassroomsScreen: React.FC = () => {
     return true;
   });
 
-  const freeCount = ROOMS.filter(r => !r.isOccupied).length;
+  const freeCount = allRooms.filter(r => !r.isOccupied).length;
 
   return (
-    <Screen topInset title="Rooms" subtitle={`${freeCount} of ${ROOMS.length} rooms are free right now`}>
+    <Screen topInset title="Rooms" subtitle={`${freeCount} of ${allRooms.length} rooms are free right now`}>
       <Field
         value={search}
         onChangeText={setSearch}
@@ -93,7 +108,7 @@ export const ClassroomsScreen: React.FC = () => {
   );
 };
 
-const RoomCard: React.FC<{ room: RoomListing; onPress: () => void }> = ({ room, onPress }) => {
+const RoomCard: React.FC<{ room: Room; onPress: () => void }> = ({ room, onPress }) => {
   const features = [room.hasAC && 'Air conditioned', room.hasProjector && 'Projector'].filter(Boolean).join(' · ');
 
   return (
@@ -111,7 +126,7 @@ const RoomCard: React.FC<{ room: RoomListing; onPress: () => void }> = ({ room, 
       <View style={styles.cardBottom}>
         <View style={styles.flex}>
           <AppText variant="label" tone="ink2">
-            {room.availability}
+            {room.isOccupied ? 'In use right now' : 'Available now'}
           </AppText>
           <AppText variant="caption" tone="ink3" style={styles.meta}>
             {room.capacity} seats{features ? ` · ${features}` : ''}

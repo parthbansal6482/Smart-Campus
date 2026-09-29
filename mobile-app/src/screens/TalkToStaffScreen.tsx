@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { medicalService } from '../services/medical.service';
+import { getErrorMessage } from '../lib/format';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Segmented } from '../components/Chips';
@@ -22,18 +24,22 @@ export const TalkToStaffScreen: React.FC = () => {
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!note.trim()) {
       Alert.alert('Tell us a little more', 'A sentence about how you’re feeling helps the nurse prepare.');
       return;
     }
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await medicalService.requestConsultation({ type, note: note.trim() });
       Alert.alert('Request sent', 'The on-duty medical team has your request.', [
         { text: 'Done', onPress: () => navigation.goBack() },
       ]);
-    }, 600);
+    } catch (error) {
+      Alert.alert('Could not send request', getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

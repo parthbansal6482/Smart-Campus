@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Check, ReceiptText } from 'lucide-react-native';
 import { Order, RootStackParamList } from '../types';
-import { useCartStore } from '../store/cartStore';
+import { cafeteriaService } from '../services/cafeteria.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -44,7 +45,16 @@ const placedAt = (iso: string) => {
 export const OrdersScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<RootStackParamList, 'Orders'>>();
-  const orders = useCartStore(state => state.orders);
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  const loadOrders = useCallback(() => {
+    cafeteriaService.getMyOrders().then(setOrders).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+    return realtimeEvents.on(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
+  }, [loadOrders]);
 
   const justPlaced = orders.find(o => o.id === route.params?.placedOrderId);
   const active = orders.filter(o => isActive(o) && o.id !== justPlaced?.id);

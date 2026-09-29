@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowUpRight, DoorOpen, MessageCircle, Pill, UtensilsCrossed, LucideIcon } from 'lucide-react-native';
 import { useAuthStore } from '../store/authStore';
-import { useCartStore } from '../store/cartStore';
-import { MENU, ROOMS } from '../data/mock';
+import { cafeteriaService } from '../services/cafeteria.service';
+import { classroomService } from '../services/classroom.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
+import { MenuItem, Order, Room } from '../types';
 import { AppText } from '../components/AppText';
 import { Card } from '../components/Card';
 import { Screen, SectionLabel } from '../components/Screen';
@@ -23,11 +25,32 @@ interface Action {
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useAuthStore(state => state.user);
-  const orders = useCartStore(state => state.orders);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+
+  const loadOrders = useCallback(() => {
+    cafeteriaService.getMyOrders().then(setOrders).catch(() => undefined);
+  }, []);
+  const loadRooms = useCallback(() => {
+    classroomService.getRooms().then(setRooms).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+    loadRooms();
+    cafeteriaService.getMenu().then(setMenu).catch(() => undefined);
+    const offOrders = realtimeEvents.on(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
+    const offRooms = realtimeEvents.on(REALTIME_EVENTS.classroomsChanged, loadRooms);
+    return () => {
+      offOrders();
+      offRooms();
+    };
+  }, [loadOrders, loadRooms]);
 
   const activeOrder = orders.find(o => o.status !== 'COLLECTED' && o.status !== 'CANCELLED');
-  const freeRoom = ROOMS.find(r => !r.isOccupied);
-  const todaysPicks = MENU.filter(m => m.isAvailable && m.category === 'LUNCH');
+  const freeRoom = rooms.find(r => !r.isOccupied);
+  const todaysPicks = menu.filter(m => m.isAvailable && m.category === 'LUNCH');
   const today = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
 
   const actions: Action[] = [
@@ -105,7 +128,7 @@ export const HomeScreen: React.FC = () => {
             </AppText>
             <View style={styles.cardFooter}>
               <AppText variant="label" tone="ink2">
-                {freeRoom.availability}
+                Available now
               </AppText>
               <View style={styles.inlineLink}>
                 <AppText variant="label">Book</AppText>

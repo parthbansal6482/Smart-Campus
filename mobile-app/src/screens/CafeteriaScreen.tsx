@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ArrowRight, ReceiptText, Soup } from 'lucide-react-native';
-import { MENU, CAMPUS } from '../data/mock';
+import { CAMPUS } from '../data/mock';
+import { cafeteriaService } from '../services/cafeteria.service';
 import { MenuCategory, MenuItem, RootStackParamList } from '../types';
 import { useCartStore, cartCount, cartTotal } from '../store/cartStore';
 import { AppText } from '../components/AppText';
@@ -22,8 +23,21 @@ export const CafeteriaScreen: React.FC = () => {
   const { lines, add, setQuantity } = useCartStore();
   const [category, setCategory] = useState<CategoryFilter>('ALL');
   const [vegOnly, setVegOnly] = useState<'all' | 'veg'>('all');
+  const [menu, setMenu] = useState<MenuItem[]>([]);
 
-  const items = MENU.filter(item => {
+  const loadMenu = useCallback(async () => {
+    try {
+      setMenu(await cafeteriaService.getMenu());
+    } catch {
+      /* keep last known menu */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMenu();
+  }, [loadMenu]);
+
+  const items = menu.filter(item => {
     if (category !== 'ALL' && item.category !== category) return false;
     if (vegOnly === 'veg' && !item.isVeg) return false;
     return true;

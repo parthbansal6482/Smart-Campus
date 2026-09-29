@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Pill, Search } from 'lucide-react-native';
-import { MEDICINES } from '../data/mock';
+import { medicalService } from '../services/medical.service';
+import { getErrorMessage } from '../lib/format';
 import { Medicine, MedicineCategory } from '../types';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -25,8 +26,13 @@ export const MedicineStoreScreen: React.FC = () => {
   const [basket, setBasket] = useState<Record<string, number>>({});
   const [fulfilment, setFulfilment] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [placing, setPlacing] = useState(false);
+  const [catalog, setCatalog] = useState<Medicine[]>([]);
 
-  const medicines = MEDICINES.filter(m => {
+  useEffect(() => {
+    medicalService.getMedicines().then(setCatalog).catch(() => undefined);
+  }, []);
+
+  const medicines = catalog.filter(m => {
     if (category !== 'ALL' && m.category !== category) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -35,7 +41,7 @@ export const MedicineStoreScreen: React.FC = () => {
     return true;
   });
 
-  const lines = MEDICINES.filter(m => basket[m.id]);
+  const lines = catalog.filter(m => basket[m.id]);
   const count = lines.reduce((sum, m) => sum + basket[m.id], 0);
   const total = lines.reduce((sum, m) => sum + m.price * basket[m.id], 0);
   const needsPrescription = lines.some(m => m.requiresPrescription);
@@ -55,10 +61,22 @@ export const MedicineStoreScreen: React.FC = () => {
     });
   };
 
-  const placeOrder = () => {
+  const placeOrder = async () => {
+    if (needsPrescription) {
+      Alert.alert(
+        'Prescription required',
+        'This basket includes a prescription-only medicine — bring your prescription to the pharmacy counter to complete this order for now.'
+      );
+      return;
+    }
+
     setPlacing(true);
-    setTimeout(() => {
-      setPlacing(false);
+    try {
+      await medicalService.placeMedicineOrder({
+        pickupOrDelivery: fulfilment,
+        items: lines.map(m => ({ medicineId: m.id, quantity: basket[m.id] })),
+      });
+      setBasket({});
       Alert.alert(
         'Order placed',
         fulfilment === 'PICKUP'
@@ -66,7 +84,11 @@ export const MedicineStoreScreen: React.FC = () => {
           : 'The pharmacy will call you to confirm where to deliver it.',
         [{ text: 'Done', onPress: () => navigation.goBack() }]
       );
-    }, 600);
+    } catch (error) {
+      Alert.alert('Could not place order', getErrorMessage(error));
+    } finally {
+      setPlacing(false);
+    }
   };
 
   return (
