@@ -32,6 +32,7 @@ const getBaseUrl = () => {
 };
 
 const API_BASE_URL = getBaseUrl();
+export { API_BASE_URL };
 
 const ACCESS_TOKEN_KEY = 'smart_campus_access_token';
 const REFRESH_TOKEN_KEY = 'smart_campus_refresh_token';
