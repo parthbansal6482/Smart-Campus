@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ClipboardList, ExternalLink, MapPin, MessageSquare, Phone, Pill, Plus, ShieldCheck } from 'lucide-react';
 import { medicalService } from '../services/medical.service';
+import { REALTIME_EVENTS } from '../services/socket';
 import {
   Consultation,
   Emergency,
@@ -83,7 +84,11 @@ export const MedicalPage: React.FC = () => {
       setLoading(false);
     })();
     const interval = setInterval(loadEmergencies, 20000);
-    return () => clearInterval(interval);
+    window.addEventListener(REALTIME_EVENTS.medicalChanged, loadEmergencies);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(REALTIME_EVENTS.medicalChanged, loadEmergencies);
+    };
   }, [loadEmergencies]);
 
   const active = emergencies.filter(e => isEmergencyActive(e.status));

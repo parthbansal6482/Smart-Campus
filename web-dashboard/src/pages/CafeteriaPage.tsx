@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ChefHat, Plus, Soup } from 'lucide-react';
 import { cafeteriaService } from '../services/cafeteria.service';
+import { REALTIME_EVENTS } from '../services/socket';
 import { MenuCategory, MenuItem, Order, OrderStatus } from '../types';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -75,7 +76,11 @@ export const CafeteriaPage: React.FC = () => {
       setLoading(false);
     })();
     const interval = setInterval(loadOrders, 20000);
-    return () => clearInterval(interval);
+    window.addEventListener(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
+    };
   }, [loadOrders]);
 
   const liveOrders = orders.filter(o => ['PLACED', 'ACCEPTED', 'PREPARING', 'READY'].includes(o.status));

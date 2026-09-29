@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { User, Role } from '../types';
 import { authService } from '../services/auth.service';
 import { tokenStorage, setUnauthorizedHandler, USER_STORAGE_KEY } from '../services/api';
+import { connectSocket, disconnectSocket } from '../services/socket';
 
 interface AuthState {
   user: User | null;
@@ -33,6 +34,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       tokenStorage.setTokens(accessToken, refreshToken);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
+      connectSocket();
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -41,6 +43,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     const refreshToken = tokenStorage.getRefreshToken();
+    disconnectSocket();
     tokenStorage.clear();
     set({ user: null, isAuthenticated: false });
     await authService.logout(refreshToken);
@@ -55,6 +58,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authService.getMe();
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true });
+      connectSocket();
     } catch {
       tokenStorage.clear();
       set({ user: null, isAuthenticated: false });

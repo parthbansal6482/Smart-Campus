@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, DoorOpen, Search } from 'lucide-react';
 import { classroomService } from '../services/classroom.service';
+import { REALTIME_EVENTS } from '../services/socket';
 import { Room, Booking, BookingStatus } from '../types';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -37,17 +38,21 @@ export const ClassroomsPage: React.FC = () => {
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const [roomsRes, bookingsRes] = await Promise.allSettled([
-        classroomService.getRooms(),
-        classroomService.getBookings(true),
-      ]);
-      if (roomsRes.status === 'fulfilled') setRooms(roomsRes.value);
-      if (bookingsRes.status === 'fulfilled') setBookings(bookingsRes.value);
-      setLoading(false);
-    })();
+  const loadData = useCallback(async () => {
+    const [roomsRes, bookingsRes] = await Promise.allSettled([
+      classroomService.getRooms(),
+      classroomService.getBookings(true),
+    ]);
+    if (roomsRes.status === 'fulfilled') setRooms(roomsRes.value);
+    if (bookingsRes.status === 'fulfilled') setBookings(bookingsRes.value);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadData();
+    window.addEventListener(REALTIME_EVENTS.classroomsChanged, loadData);
+    return () => window.removeEventListener(REALTIME_EVENTS.classroomsChanged, loadData);
+  }, [loadData]);
 
   const buildings = useMemo(() => {
     const map = new Map<string, string>();
