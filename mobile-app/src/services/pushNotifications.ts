@@ -1,17 +1,31 @@
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { api } from './api';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Expo Go (SDK 53+) no longer supports remote push, and merely importing
+// expo-notifications there throws at module load. So the module is required
+// lazily, and only in a development/production build.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+type NotificationsModule = typeof import('expo-notifications');
+let notifications: NotificationsModule | null = null;
+
+const getNotifications = (): NotificationsModule | null => {
+  if (isExpoGo) return null;
+  if (!notifications) {
+    notifications = require('expo-notifications') as NotificationsModule;
+    notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  }
+  return notifications;
+};
 
 /**
  * Requests permission, obtains an Expo push token for this device, and saves
@@ -26,6 +40,9 @@ export const registerForPushNotifications = async (): Promise<void> => {
   }
 
   try {
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
