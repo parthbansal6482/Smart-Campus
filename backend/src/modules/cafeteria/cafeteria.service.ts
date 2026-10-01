@@ -256,6 +256,10 @@ export class CafeteriaService {
     const isOwner = order.userId === actor.userId;
     const isStaff = actor.role === Role.CAFETERIA_STAFF || actor.role === Role.ADMIN;
 
+    if (order.status === OrderStatus.COLLECTED || order.status === OrderStatus.CANCELLED) {
+      throw new ConflictError(`This order is already ${order.status.toLowerCase()} and can no longer be changed`);
+    }
+
     if (status === OrderStatus.CANCELLED) {
       if (!isOwner && !isStaff) throw new ForbiddenError('You cannot cancel this order');
       if (isOwner && !isStaff && order.status !== OrderStatus.PLACED) {
@@ -265,10 +269,16 @@ export class CafeteriaService {
       throw new ForbiddenError('Only cafeteria staff can update this status');
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { status },
-      include: orderInclude,
+    const updated = await prisma.$transaction(async tx => {
+      // A cancelled order gives its offer redemption back, so a limited
+      // offer isn't permanently consumed by an order that never happened.
+      if (status === OrderStatus.CANCELLED && order.offerCode) {
+        await tx.$executeRaw`
+          UPDATE offers SET redemption_count = GREATEST(redemption_count - 1, 0)
+          WHERE code = ${order.offerCode}
+        `;
+      }
+      return tx.order.update({ where: { id }, data: { status }, include: orderInclude });
     });
 
     try {

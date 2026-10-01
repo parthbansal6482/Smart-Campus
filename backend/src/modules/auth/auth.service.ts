@@ -107,7 +107,10 @@ export class AuthService {
     const isMatch = await bcrypt.compare(input.password, user.passwordHash);
 
     if (!isMatch) {
-      const failedLoginAttempts = user.failedLoginAttempts + 1;
+      // A lock that has since expired starts a fresh count — otherwise the
+      // stale counter (still >= MAX) would re-lock on the very next typo.
+      const lockExpired = user.lockedUntil !== null && user.lockedUntil <= new Date();
+      const failedLoginAttempts = (lockExpired ? 0 : user.failedLoginAttempts) + 1;
       const lockedUntil = failedLoginAttempts >= MAX_FAILED_ATTEMPTS ? new Date(Date.now() + LOCK_DURATION_MS) : null;
 
       await prisma.user.update({
@@ -156,7 +159,15 @@ export class AuthService {
       throw new ForbiddenError('This account has been deactivated. Contact an administrator.');
     }
 
-    await prisma.refreshToken.update({ where: { id: record.id }, data: { revokedAt: new Date() } });
+    // Conditional on still being unrevoked, so two concurrent refreshes with
+    // the same token can't both succeed and fork the session.
+    const revoked = await prisma.refreshToken.updateMany({
+      where: { id: record.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (revoked.count === 0) {
+      throw new UnauthorizedError('Refresh token is invalid or has expired');
+    }
 
     // Carries the session's identity (same device/browser) forward to the new
     // token record, rather than losing it on every rotation.
@@ -234,15 +245,22 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-    await prisma.$transaction([
-      prisma.user.update({
+    await prisma.$transaction(async tx => {
+      // Claim the token first (single-use, even under concurrent requests).
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new UnauthorizedError('This reset link is invalid or has expired');
+      }
+      await tx.user.update({
         where: { id: record.userId },
         data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null },
-      }),
-      prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      });
       // Resetting a password should force every existing session to re-authenticate.
-      prisma.refreshToken.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
-    ]);
+      await tx.refreshToken.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    });
 
     await recordAudit({ actorId: record.userId, action: 'auth.password_reset', targetType: 'User', targetId: record.userId });
   }

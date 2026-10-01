@@ -310,11 +310,12 @@ export class MedicalService {
     // Mirrors the cafeteria order pattern: a student can cancel their own
     // order only while it's still just PLACED (nothing's been prepared
     // yet); any other change, or a later-stage cancellation, is staff-only.
+    if (existing.status === MedicineOrderStatus.CANCELLED || existing.status === MedicineOrderStatus.DELIVERED) {
+      throw new ConflictError(`This order has already been ${existing.status.toLowerCase()} and can no longer be changed`);
+    }
+
     if (status === MedicineOrderStatus.CANCELLED) {
       if (!isOwner && !isStaff) throw new ForbiddenError('You cannot cancel this order');
-      if (existing.status === MedicineOrderStatus.CANCELLED) {
-        throw new ConflictError('This order has already been cancelled');
-      }
       if (isOwner && !isStaff && existing.status !== MedicineOrderStatus.PLACED) {
         throw new ConflictError('This order is already being prepared and can no longer be cancelled by you — contact the pharmacy');
       }

@@ -258,6 +258,10 @@ export class ClassroomsService {
       throw new NotFoundError('Booking not found');
     }
 
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
+      throw new ConflictError(`This booking is already ${booking.status.toLowerCase()} and can no longer be changed`);
+    }
+
     const isOwner = booking.userId === actor.userId;
     const isPrivileged = actor.role === Role.ADMIN || actor.role === Role.FACULTY;
 
