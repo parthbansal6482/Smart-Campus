@@ -26,12 +26,15 @@ let socket: Socket | null = null;
  * broadcast rooms it belongs to.
  */
 export const connectSocket = (): Socket | null => {
-  const token = tokenStorage.getAccessToken();
-  if (!token) return null;
-  if (socket?.connected) return socket;
+  if (!tokenStorage.getAccessToken()) return null;
+  // Also covers a socket that is still connecting/reconnecting — opening a
+  // second one would double-deliver every event.
+  if (socket) return socket;
 
   socket = io(SOCKET_URL, {
-    auth: { token },
+    // A callback so every (re)connect uses the current access token rather
+    // than the one captured at first connect, which may have since expired.
+    auth: cb => cb({ token: tokenStorage.getAccessToken() }),
     transports: ['websocket'],
   });
 

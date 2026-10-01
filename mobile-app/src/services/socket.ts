@@ -18,10 +18,16 @@ let socket: Socket | null = null;
 export const connectSocket = async (): Promise<Socket | null> => {
   const token = await tokenStorage.getAccessToken();
   if (!token) return null;
-  if (socket?.connected) return socket;
+  // Checked after the await so concurrent callers can't both open a socket;
+  // also covers one that is still connecting/reconnecting.
+  if (socket) return socket;
 
   socket = io(SOCKET_URL, {
-    auth: { token },
+    // A callback so every (re)connect uses the current access token rather
+    // than the one captured at first connect, which may have since expired.
+    auth: cb => {
+      tokenStorage.getAccessToken().then(fresh => cb({ token: fresh }));
+    },
     transports: ['websocket'],
   });
 
