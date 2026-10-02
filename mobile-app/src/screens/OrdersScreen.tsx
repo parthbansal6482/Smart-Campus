@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Check, ReceiptText } from 'lucide-react-native';
 import { Order, RootStackParamList } from '../types';
@@ -12,7 +12,7 @@ import { Screen, SectionLabel } from '../components/Screen';
 import { StatusBadge } from '../components/StatusBadge';
 import { EmptyState, StepProgress } from '../components/Bits';
 import { colors, spacing, Tone } from '../theme';
-import { formatCurrency, formatTime } from '../lib/format';
+import { formatCurrency, formatTime, getErrorMessage } from '../lib/format';
 
 const FLOW: Order['status'][] = ['PLACED', 'PREPARING', 'READY', 'COLLECTED'];
 
@@ -56,6 +56,25 @@ export const OrdersScreen: React.FC = () => {
     return realtimeEvents.on(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
   }, [loadOrders]);
 
+  const cancelOrder = (order: Order) => {
+    Alert.alert('Cancel this order?', `${order.orderToken} will be cancelled. You can only do this before the kitchen starts on it.`, [
+      { text: 'Keep order', style: 'cancel' },
+      {
+        text: 'Cancel order',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cafeteriaService.cancelOrder(order.id);
+            loadOrders();
+          } catch (error) {
+            Alert.alert('Could not cancel', getErrorMessage(error, 'The kitchen may have already started on it.'));
+            loadOrders();
+          }
+        },
+      },
+    ]);
+  };
+
   const justPlaced = orders.find(o => o.id === route.params?.placedOrderId);
   const active = orders.filter(o => isActive(o) && o.id !== justPlaced?.id);
   const past = orders.filter(o => !isActive(o));
@@ -92,7 +111,7 @@ export const OrdersScreen: React.FC = () => {
               : 'We’ll bring it to your table when it’s ready'}
           </AppText>
           <View style={styles.confirmationCard}>
-            <OrderCard order={justPlaced} bare />
+            <OrderCard order={justPlaced} onCancel={cancelOrder} bare />
           </View>
         </View>
       )}
@@ -102,7 +121,7 @@ export const OrdersScreen: React.FC = () => {
           <SectionLabel>In progress</SectionLabel>
           <View style={styles.list}>
             {active.map(order => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} onCancel={cancelOrder} />
             ))}
           </View>
         </>
@@ -122,7 +141,7 @@ export const OrdersScreen: React.FC = () => {
   );
 };
 
-const OrderCard: React.FC<{ order: Order; bare?: boolean }> = ({ order, bare }) => {
+const OrderCard: React.FC<{ order: Order; onCancel?: (order: Order) => void; bare?: boolean }> = ({ order, onCancel, bare }) => {
   const step = FLOW.indexOf(order.status === 'ACCEPTED' ? 'PLACED' : order.status);
   const content = (
     <>
@@ -174,6 +193,10 @@ const OrderCard: React.FC<{ order: Order; bare?: boolean }> = ({ order, bare }) 
         </AppText>
         <AppText variant="bodyMedium">{formatCurrency(order.totalAmount)}</AppText>
       </View>
+
+      {onCancel && order.status === 'PLACED' && (
+        <Button title="Cancel order" variant="secondary" onPress={() => onCancel(order)} style={styles.cancel} />
+      )}
     </>
   );
 
@@ -210,6 +233,7 @@ const styles = StyleSheet.create({
   items: { marginTop: spacing.lg, gap: 6 },
   itemRow: { flexDirection: 'row', gap: spacing.md },
   note: { marginTop: spacing.sm },
+  cancel: { marginTop: spacing.md },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
