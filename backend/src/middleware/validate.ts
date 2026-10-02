@@ -5,11 +5,14 @@ import { sendError } from '../utils/response';
 export const validate = (schema: AnyZodObject) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await schema.parseAsync({
+      const parsed = await schema.parseAsync({
         body: req.body,
         query: req.query,
         params: req.params,
       });
+      // Hand handlers the parsed body, so schema transforms (trim, lowercase)
+      // and defaults actually apply instead of being validated then discarded.
+      if (parsed.body !== undefined) req.body = parsed.body;
       return next();
     } catch (error) {
       if (error instanceof ZodError) {
