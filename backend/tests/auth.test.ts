@@ -51,6 +51,28 @@ describe('POST /auth/login', () => {
   });
 });
 
+describe('email normalization', () => {
+  it('treats emails case-insensitively: a mixed-case signup can log in with any casing', async () => {
+    const local = `test-${randomUUID()}`;
+    const lower = `${local}@example.test`;
+    // The tracked cleanup list holds the lowercased address the API stores.
+    const registered = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ name: 'Mixed Case', email: `  ${local.toUpperCase()}@Example.Test `, password: 'Testpass1' });
+    expect(registered.status).toBe(201);
+    expect(registered.body.data.user.email).toBe(lower);
+
+    const login = await request(app).post('/api/v1/auth/login').send({ email: lower.toUpperCase(), password: 'Testpass1' });
+    expect(login.status).toBe(200);
+
+    const duplicate = await request(app).post('/api/v1/auth/register').send({ name: 'Dup', email: lower, password: 'Testpass1' });
+    expect(duplicate.status).toBe(409);
+
+    const { prisma } = await import('../src/config/db');
+    await prisma.user.delete({ where: { email: lower } });
+  });
+});
+
 describe('POST /auth/refresh', () => {
   it('rotates the refresh token and rejects the old one on reuse', async () => {
     const admin = await loginAsAdmin();

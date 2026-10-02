@@ -140,3 +140,40 @@ describe('PATCH /cafeteria/orders/:id/status — cancellation window', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('PATCH /cafeteria/orders/:id/status — final states', () => {
+  it('does not let a cancelled order be changed again, and gives back its offer redemption', async () => {
+    const [admin, cafeteriaStaff, student] = await Promise.all([
+      request(app).post('/api/v1/auth/login').send({ email: 'admin@smartcampus.edu', password: 'Password@123' }),
+      request(app).post('/api/v1/auth/login').send({ email: 'cafeteria@smartcampus.edu', password: 'Password@123' }),
+      createStudent(),
+    ]);
+    const code = `TESTRELEASE${randomUUID().slice(0, 6).toUpperCase()}`;
+    await request(app)
+      .post('/api/v1/cafeteria/offers')
+      .set('Authorization', authed(admin.body.data.accessToken))
+      .send({ title: 'Test release offer', code, discountPercent: 10, maxRedemptions: 1 });
+
+    const order = await request(app)
+      .post('/api/v1/cafeteria/orders')
+      .set('Authorization', authed(student.accessToken))
+      .send({ orderType: 'PICKUP', offerCode: code, items: [{ menuItemId, quantity: 1 }] });
+    expect(order.status).toBe(201);
+    expect((await prisma.offer.findUnique({ where: { code } }))?.redemptionCount).toBe(1);
+
+    const cancelled = await request(app)
+      .patch(`/api/v1/cafeteria/orders/${order.body.data.id}/status`)
+      .set('Authorization', authed(student.accessToken))
+      .send({ status: 'CANCELLED' });
+    expect(cancelled.status).toBe(200);
+    expect((await prisma.offer.findUnique({ where: { code } }))?.redemptionCount).toBe(0);
+
+    const revived = await request(app)
+      .patch(`/api/v1/cafeteria/orders/${order.body.data.id}/status`)
+      .set('Authorization', authed(cafeteriaStaff.body.data.accessToken))
+      .send({ status: 'READY' });
+    expect(revived.status).toBe(409);
+
+    await prisma.offer.delete({ where: { code } });
+  });
+});
