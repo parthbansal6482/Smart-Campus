@@ -49,6 +49,27 @@ export class MedicalController {
     }
   }
 
+  async recordLocationPing(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ping = await medicalService.recordLocationPing(req.params.id, req.user!.userId, req.body);
+      return sendSuccess(res, ping, 'Location recorded', 201);
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async getLocationTrail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const trail = await medicalService.getLocationTrail(req.params.id, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+      });
+      return sendSuccess(res, trail, 'Location trail retrieved');
+    } catch (error) {
+      return next(error);
+    }
+  }
+
   // Medicines
   async getMedicines(req: Request, res: Response, next: NextFunction) {
     try {
