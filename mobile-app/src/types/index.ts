@@ -65,6 +65,15 @@ export interface Emergency {
   building?: Building;
 }
 
+export interface EmergencyLocationPing {
+  id: string;
+  emergencyId: string;
+  latitude: number;
+  longitude: number;
+  accuracyM?: number;
+  recordedAt: string;
+}
+
 export type MedicineCategory = 'PAIN_RELIEF' | 'FIRST_AID' | 'COLD_FEVER' | 'PRESCRIPTION_ONLY' | 'GENERAL';
 
 export interface Medicine {

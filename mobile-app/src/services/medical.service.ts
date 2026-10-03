@@ -1,5 +1,5 @@
 import { api } from './api';
-import { Consultation, Emergency, Medicine, MedicineOrder } from '../types';
+import { Consultation, Emergency, EmergencyLocationPing, Medicine, MedicineOrder } from '../types';
 
 export const medicalService = {
   getMedicines: async (category?: string, search?: string): Promise<Medicine[]> => {
@@ -11,6 +11,17 @@ export const medicalService = {
 
   getMyEmergencies: async (): Promise<Emergency[]> => {
     const res = await api.get<{ success: boolean; data: Emergency[] }>('/medical-help/emergencies');
+    return res.data.data;
+  },
+
+  sendEmergencyLocation: async (
+    emergencyId: string,
+    fix: { latitude: number; longitude: number; accuracyM?: number }
+  ): Promise<EmergencyLocationPing> => {
+    const res = await api.post<{ success: boolean; data: EmergencyLocationPing }>(
+      `/medical-help/emergencies/${emergencyId}/location`,
+      fix
+    );
     return res.data.data;
   },
 
