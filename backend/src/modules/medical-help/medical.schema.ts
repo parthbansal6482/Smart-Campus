@@ -12,6 +12,15 @@ export const triggerEmergencySchema = z.object({
   }),
 });
 
+// A single GPS fix streamed from the reporter's device during an open emergency.
+export const emergencyLocationPingSchema = z.object({
+  body: z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    accuracyM: z.number().min(0).max(100_000).optional(),
+  }),
+});
+
 export const updateEmergencyStatusSchema = z.object({
   body: z.object({
     status: z.nativeEnum(EmergencyStatus),
