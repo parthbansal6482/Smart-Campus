@@ -306,11 +306,28 @@ model Emergency {
   user          User            @relation("EmergencyReporter", fields: [userId], references: [id], onDelete: Cascade)
   responder     User?           @relation("EmergencyResponder", fields: [responderId], references: [id], onDelete: SetNull)
   building      Building?       @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  locationPings EmergencyLocationPing[]
 
   @@index([userId])
   @@index([status])
   @@index([reportedAt])
   @@map("emergencies")
+}
+
+// One GPS fix streamed from the reporter's device while an emergency is open.
+// Emergency.latitude/longitude stay as the initial fix; these are the trail.
+model EmergencyLocationPing {
+  id          String   @id @default(uuid())
+  emergencyId String   @map("emergency_id")
+  latitude    Float
+  longitude   Float
+  accuracyM   Float?   @map("accuracy_m")
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+
+  emergency   Emergency @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+
+  @@index([emergencyId, recordedAt])
+  @@map("emergency_location_pings")
 }
 
 model Medicine {
