@@ -169,6 +169,35 @@ export class MedicalService {
     return updated;
   }
 
+  // --- EMERGENCY LOCATION TRACKING (basic scaffold) ---
+  // TODO: throttle pings per emergency, cap the stored trail length, and
+  // broadcast each ping to the `emergency-<id>` socket room.
+  async recordLocationPing(emergencyId: string, userId: string, fix: { latitude: number; longitude: number; accuracyM?: number }) {
+    const emergency = await prisma.emergency.findUnique({ where: { id: emergencyId } });
+    if (!emergency) throw new NotFoundError('Emergency incident not found');
+    if (emergency.userId !== userId) throw new ForbiddenError('Only the reporter can share location for this incident');
+    if (!ACTIVE_EMERGENCY_STATUSES.includes(emergency.status)) {
+      throw new ConflictError('This incident is no longer active');
+    }
+
+    return prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } });
+  }
+
+  async getLocationTrail(emergencyId: string, actor: { userId: string; role: Role }, limit = 100) {
+    const emergency = await prisma.emergency.findUnique({ where: { id: emergencyId }, select: { userId: true } });
+    if (!emergency) throw new NotFoundError('Emergency incident not found');
+    if (emergency.userId !== actor.userId && !RESPONDER_ROLES.includes(actor.role)) {
+      throw new ForbiddenError('You cannot view this incident');
+    }
+
+    const pings = await prisma.emergencyLocationPing.findMany({
+      where: { emergencyId },
+      orderBy: { recordedAt: 'desc' },
+      take: limit,
+    });
+    return pings.reverse();
+  }
+
   // --- MEDICINE STORE TRACK ---
   async getMedicines(category?: MedicineCategory, search?: string) {
     return prisma.medicine.findMany({
