@@ -1,5 +1,5 @@
 import { api } from './api';
-import { ApiResponse, Emergency, EmergencyStatus, Medicine, MedicineOrder, MedicineOrderStatus, Consultation } from '../types';
+import { ApiResponse, Emergency, EmergencyLocationPing, EmergencyStatus, Medicine, MedicineOrder, MedicineOrderStatus, Consultation } from '../types';
 
 export const medicalService = {
   // Emergencies Track
@@ -10,6 +10,12 @@ export const medicalService = {
 
   getAllEmergencies: async (all = true): Promise<Emergency[]> => {
     const res = await api.get<ApiResponse<Emergency[]>>('/medical-help/emergencies', { params: { all } });
+    return res.data.data;
+  },
+
+  // Basic scaffold: fetches the GPS trail for an incident. Not rendered on a map yet.
+  getEmergencyLocationTrail: async (id: string): Promise<EmergencyLocationPing[]> => {
+    const res = await api.get<ApiResponse<EmergencyLocationPing[]>>(`/medical-help/emergencies/${id}/location`);
     return res.data.data;
   },
 
