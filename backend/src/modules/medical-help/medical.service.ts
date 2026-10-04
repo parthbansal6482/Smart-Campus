@@ -5,6 +5,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { calculateDistanceMeters } from '../../utils/geo';
 import { notifyRoles, notifyUser } from '../../services/notification.service';
 import { recordAudit } from '../../utils/audit';
+import { getSocketIO } from '../../sockets/socket.server';
 
 // A double-tap or a flaky connection retry shouldn't create two separate
 // incidents for the same emergency — if this user already has an active
@@ -170,8 +171,7 @@ export class MedicalService {
   }
 
   // --- EMERGENCY LOCATION TRACKING (basic scaffold) ---
-  // TODO: throttle pings per emergency, cap the stored trail length, and
-  // broadcast each ping to the `emergency-<id>` socket room.
+  // TODO: throttle pings per emergency and cap the stored trail length.
   async recordLocationPing(emergencyId: string, userId: string, fix: { latitude: number; longitude: number; accuracyM?: number }) {
     const emergency = await prisma.emergency.findUnique({ where: { id: emergencyId } });
     if (!emergency) throw new NotFoundError('Emergency incident not found');
@@ -180,7 +180,16 @@ export class MedicalService {
       throw new ConflictError('This incident is no longer active');
     }
 
-    return prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } });
+    const ping = await prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } });
+
+    // Live-update anyone watching this incident (responders, the reporter).
+    try {
+      getSocketIO().to(`emergency-${emergencyId}`).emit('emergency:reporter_location_updated', ping);
+    } catch {
+      // Socket server not running (e.g. in tests) — the ping is still stored.
+    }
+
+    return ping;
   }
 
   async getLocationTrail(emergencyId: string, actor: { userId: string; role: Role }, limit = 100) {
