@@ -72,6 +72,16 @@ npm start
 
 ---
 
+## Emergency Location Tracking (scaffold)
+
+Basic groundwork for live GPS sharing during an emergency — not feature-complete.
+
+- `POST /api/v1/medical-help/emergencies/:id/location` — reporter streams a GPS fix (`latitude`, `longitude`, optional `accuracyM`).
+- `GET /api/v1/medical-help/emergencies/:id/location` — reporter or responder reads the trail.
+- Each ping is also emitted as `emergency:reporter_location_updated` to the `emergency-<id>` socket room.
+- Mobile: `mobile-app/src/services/emergencyTracking.ts` (not yet wired into `EmergencyScreen`).
+- Requires the `emergency_location_pings` migration: `cd backend && npx prisma migrate deploy`.
+
 ## Seed Accounts (`Password@123`)
 
 | Role | Email | Password |
