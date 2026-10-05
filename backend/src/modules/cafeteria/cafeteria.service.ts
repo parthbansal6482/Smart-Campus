@@ -9,6 +9,21 @@ const orderInclude = {
   orderItems: { include: { menuItem: true } },
 } as const;
 
+// Optional nutrition facts and extra photos, shared by create and update.
+export interface MenuItemDetails {
+  galleryUrls: string[];
+  servingSize: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG: number;
+  sugarG: number;
+  sodiumMg: number;
+  ingredients: string[];
+  allergens: string[];
+}
+
 export class CafeteriaService {
   // Menu items
   async getMenu(category?: MenuCategory, isVeg?: boolean, search?: string) {
@@ -39,7 +54,7 @@ export class CafeteriaService {
     rating: number;
     isAvailable: boolean;
     imageUrl?: string;
-  }) {
+  } & Partial<MenuItemDetails>) {
     return prisma.menuItem.create({ data });
   }
 
@@ -55,7 +70,8 @@ export class CafeteriaService {
       rating: number;
       isAvailable: boolean;
       imageUrl: string;
-    }>
+    }> &
+      Partial<MenuItemDetails>
   ) {
     const item = await prisma.menuItem.findUnique({ where: { id } });
     if (!item) throw new NotFoundError('Menu item not found');

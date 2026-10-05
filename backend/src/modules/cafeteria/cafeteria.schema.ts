@@ -1,6 +1,20 @@
 import { z } from 'zod';
 import { MenuCategory, OrderStatus, OrderType } from '@prisma/client';
 
+const nutritionFields = {
+  galleryUrls: z.array(z.string().url()).max(8).optional(),
+  servingSize: z.string().max(60).optional(),
+  calories: z.number().int().min(0).max(5000).optional(),
+  proteinG: z.number().min(0).max(500).optional(),
+  carbsG: z.number().min(0).max(500).optional(),
+  fatG: z.number().min(0).max(500).optional(),
+  fiberG: z.number().min(0).max(500).optional(),
+  sugarG: z.number().min(0).max(500).optional(),
+  sodiumMg: z.number().min(0).max(20000).optional(),
+  ingredients: z.array(z.string().trim().min(1).max(60)).max(40).optional(),
+  allergens: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+};
+
 export const createMenuItemSchema = z.object({
   body: z.object({
     name: z.string().min(2, 'Name is required'),
@@ -12,6 +26,7 @@ export const createMenuItemSchema = z.object({
     rating: z.number().min(0).max(5).default(4.5),
     isAvailable: z.boolean().default(true),
     imageUrl: z.string().url().optional(),
+    ...nutritionFields,
   }),
 });
 
@@ -26,6 +41,7 @@ export const updateMenuItemSchema = z.object({
     rating: z.number().min(0).max(5).optional(),
     isAvailable: z.boolean().optional(),
     imageUrl: z.string().url().optional(),
+    ...nutritionFields,
   }),
 });
 
