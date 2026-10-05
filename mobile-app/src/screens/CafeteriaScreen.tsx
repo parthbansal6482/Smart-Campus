@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ArrowRight, ReceiptText, Soup } from 'lucide-react-native';
@@ -153,8 +153,21 @@ const MenuRow: React.FC<MenuRowProps> = ({ item, quantity, last, onOpen, onAdd, 
       )}
       <AppText variant="bodyMedium" style={styles.price}>
         {formatCurrency(item.price)}
+        {item.calories != null && (
+          <AppText variant="caption" tone="ink3">
+            {`  ·  ${item.calories} kcal`}
+          </AppText>
+        )}
       </AppText>
     </View>
+
+    {item.imageUrl && (
+      <Image
+        source={{ uri: item.imageUrl }}
+        accessibilityIgnoresInvertColors
+        style={[styles.thumb, !item.isAvailable && styles.soldOut]}
+      />
+    )}
 
     <View style={styles.rowAction}>
       {!item.isAvailable ? (
@@ -201,6 +214,7 @@ const styles = StyleSheet.create({
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.lineStrong },
   rowPressed: { backgroundColor: colors.canvas },
   rowText: { flex: 1 },
+  thumb: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.sunken },
   soldOut: { opacity: 0.45 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { flex: 1 },
