@@ -21,6 +21,15 @@ export const cafeteriaService = {
     await api.delete(`/cafeteria/menu/${id}`);
   },
 
+  uploadPhoto: async (file: File): Promise<string> => {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await api.post<ApiResponse<{ url: string }>>('/uploads', body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data.url;
+  },
+
   getOrders: async (all = true, status?: OrderStatus): Promise<Order[]> => {
     const res = await api.get<ApiResponse<Order[]>>('/cafeteria/orders', { params: { all, status } });
     return res.data.data;

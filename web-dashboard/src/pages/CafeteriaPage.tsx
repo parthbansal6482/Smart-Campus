@@ -33,9 +33,78 @@ interface MenuForm {
   price: string;
   isVeg: boolean;
   spiceLevel: string;
+  // First photo is the cover; the rest form the gallery.
+  photos: string[];
+  servingSize: string;
+  calories: string;
+  proteinG: string;
+  carbsG: string;
+  fatG: string;
+  fiberG: string;
+  sugarG: string;
+  sodiumMg: string;
+  ingredients: string;
+  allergens: string;
 }
 
-const emptyForm: MenuForm = { name: '', description: '', category: 'LUNCH', price: '', isVeg: true, spiceLevel: '0' };
+const emptyForm: MenuForm = {
+  name: '',
+  description: '',
+  category: 'LUNCH',
+  price: '',
+  isVeg: true,
+  spiceLevel: '0',
+  photos: [],
+  servingSize: '',
+  calories: '',
+  proteinG: '',
+  carbsG: '',
+  fatG: '',
+  fiberG: '',
+  sugarG: '',
+  sodiumMg: '',
+  ingredients: '',
+  allergens: '',
+};
+
+const nutritionInputs: { key: 'calories' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'sugarG' | 'sodiumMg'; label: string }[] = [
+  { key: 'calories', label: 'Calories (kcal)' },
+  { key: 'proteinG', label: 'Protein (g)' },
+  { key: 'carbsG', label: 'Carbs (g)' },
+  { key: 'fatG', label: 'Fat (g)' },
+  { key: 'fiberG', label: 'Fiber (g)' },
+  { key: 'sugarG', label: 'Sugar (g)' },
+  { key: 'sodiumMg', label: 'Sodium (mg)' },
+];
+
+const toList = (value: string) =>
+  value
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+
+const toNumber = (value: string) => (value.trim() === '' ? undefined : Number(value));
+
+const formFromItem = (item: MenuItem): MenuForm => ({
+  id: item.id,
+  name: item.name,
+  description: item.description ?? '',
+  category: item.category,
+  price: String(item.price),
+  isVeg: item.isVeg,
+  spiceLevel: String(item.spiceLevel),
+  photos: [...(item.imageUrl ? [item.imageUrl] : []), ...(item.galleryUrls ?? [])],
+  servingSize: item.servingSize ?? '',
+  calories: item.calories != null ? String(item.calories) : '',
+  proteinG: item.proteinG != null ? String(item.proteinG) : '',
+  carbsG: item.carbsG != null ? String(item.carbsG) : '',
+  fatG: item.fatG != null ? String(item.fatG) : '',
+  fiberG: item.fiberG != null ? String(item.fiberG) : '',
+  sugarG: item.sugarG != null ? String(item.sugarG) : '',
+  sodiumMg: item.sodiumMg != null ? String(item.sodiumMg) : '',
+  ingredients: (item.ingredients ?? []).join(', '),
+  allergens: (item.allergens ?? []).join(', '),
+});
 
 const VegMark: React.FC<{ isVeg: boolean }> = ({ isVeg }) => (
   <span
@@ -58,6 +127,7 @@ export const CafeteriaPage: React.FC = () => {
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | MenuCategory>('ALL');
   const [form, setForm] = useState<MenuForm | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const loadOrders = useCallback(async () => {
@@ -114,6 +184,21 @@ export const CafeteriaPage: React.FC = () => {
     }
   };
 
+  const addPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !form) return;
+    setUploading(true);
+    try {
+      const url = await cafeteriaService.uploadPhoto(file);
+      setForm(prev => (prev ? { ...prev, photos: [...prev.photos, url] } : prev));
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Couldn’t upload the photo.'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -125,6 +210,18 @@ export const CafeteriaPage: React.FC = () => {
       price: parseFloat(form.price),
       isVeg: form.isVeg,
       spiceLevel: parseInt(form.spiceLevel, 10),
+      imageUrl: form.photos[0],
+      galleryUrls: form.photos.slice(1),
+      servingSize: form.servingSize.trim() || undefined,
+      calories: toNumber(form.calories),
+      proteinG: toNumber(form.proteinG),
+      carbsG: toNumber(form.carbsG),
+      fatG: toNumber(form.fatG),
+      fiberG: toNumber(form.fiberG),
+      sugarG: toNumber(form.sugarG),
+      sodiumMg: toNumber(form.sodiumMg),
+      ingredients: toList(form.ingredients),
+      allergens: toList(form.allergens),
     };
     try {
       if (form.id) {
@@ -342,6 +439,11 @@ export const CafeteriaPage: React.FC = () => {
                   <TR key={item.id} className={cn(!item.isAvailable && 'text-ink-4')}>
                     <TD>
                       <div className="flex items-center gap-2.5">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt="" className="w-10 h-10 rounded-md object-cover shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-md bg-sunken shrink-0" aria-hidden />
+                        )}
                         <VegMark isVeg={item.isVeg} />
                         <div className="min-w-0">
                           <p className={cn('font-medium', item.isAvailable ? 'text-ink' : 'text-ink-3')}>{item.name}</p>
@@ -365,17 +467,7 @@ export const CafeteriaPage: React.FC = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() =>
-                          setForm({
-                            id: item.id,
-                            name: item.name,
-                            description: item.description ?? '',
-                            category: item.category,
-                            price: String(item.price),
-                            isVeg: item.isVeg,
-                            spiceLevel: String(item.spiceLevel),
-                          })
-                        }
+                        onClick={() => setForm(formFromItem(item))}
                       >
                         Edit
                       </Button>
@@ -445,6 +537,67 @@ export const CafeteriaPage: React.FC = () => {
                 <option value="nonveg">Non-vegetarian</option>
               </Select>
             </div>
+            <fieldset className="space-y-2">
+              <legend className="text-[13px] font-medium text-ink">Photos</legend>
+              <p className="text-xs text-ink-3">The first photo is the cover shown on the menu.</p>
+              <div className="flex flex-wrap gap-2">
+                {form.photos.map((url, i) => (
+                  <div key={url} className="relative">
+                    <img src={url} alt="" className="w-20 h-20 rounded-md object-cover" />
+                    <button
+                      type="button"
+                      aria-label="Remove photo"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-ink text-white text-xs leading-5"
+                      onClick={() => setForm({ ...form, photos: form.photos.filter((_, idx) => idx !== i) })}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {form.photos.length < 9 && (
+                  <label className="w-20 h-20 rounded-md border border-dashed border-line flex items-center justify-center text-xs text-ink-3 cursor-pointer hover:bg-sunken">
+                    {uploading ? 'Uploading…' : '+ Add'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={addPhoto} disabled={uploading} />
+                  </label>
+                )}
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="text-[13px] font-medium text-ink">Nutrition (per serving)</legend>
+              <Input
+                label="Serving size"
+                value={form.servingSize}
+                onChange={e => setForm({ ...form, servingSize: e.target.value })}
+                placeholder="e.g. 1 plate (250 g)"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                {nutritionInputs.map(({ key, label }) => (
+                  <Input
+                    key={key}
+                    label={label}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={form[key]}
+                    onChange={e => setForm({ ...form, [key]: e.target.value })}
+                  />
+                ))}
+              </div>
+              <Input
+                label="Ingredients"
+                value={form.ingredients}
+                onChange={e => setForm({ ...form, ingredients: e.target.value })}
+                placeholder="Comma separated — rice, kidney beans, onion"
+              />
+              <Input
+                label="Allergens"
+                value={form.allergens}
+                onChange={e => setForm({ ...form, allergens: e.target.value })}
+                placeholder="Comma separated — gluten, dairy, nuts"
+              />
+            </fieldset>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="ghost" onClick={() => setForm(null)}>
                 Cancel

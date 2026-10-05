@@ -144,6 +144,17 @@ export interface MenuItem {
   rating: number;
   isAvailable: boolean;
   imageUrl?: string;
+  galleryUrls?: string[];
+  servingSize?: string;
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  fiberG?: number;
+  sugarG?: number;
+  sodiumMg?: number;
+  ingredients?: string[];
+  allergens?: string[];
 }
 
 export type OrderType = 'PICKUP' | 'DINE_IN';
