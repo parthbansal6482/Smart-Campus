@@ -414,7 +414,21 @@ model MenuItem {
   isAvailable Boolean      @default(true) @map("is_available")
   isArchived  Boolean      @default(false) @map("is_archived")
   imageUrl    String?      @map("image_url")
+  // Extra photos shown in the item's gallery, after the main imageUrl.
+  galleryUrls String[]     @default([]) @map("gallery_urls")
   createdAt   DateTime     @default(now()) @map("created_at")
+
+  // Nutrition facts, per serving.
+  servingSize String?      @map("serving_size") // e.g. "1 plate (250 g)"
+  calories    Int?
+  proteinG    Float?       @map("protein_g")
+  carbsG      Float?       @map("carbs_g")
+  fatG        Float?       @map("fat_g")
+  fiberG      Float?       @map("fiber_g")
+  sugarG      Float?       @map("sugar_g")
+  sodiumMg    Float?       @map("sodium_mg")
+  ingredients String[]     @default([])
+  allergens   String[]     @default([])
 
   orderItems  OrderItem[]
 
