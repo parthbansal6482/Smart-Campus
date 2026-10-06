@@ -1,11 +1,12 @@
 import { EmergencyStatus, EmergencyTag, MedicineCategory, MedicineOrderStatus, ConsultationType, ConsultationStatus, Role } from '@prisma/client';
 import { prisma } from '../../config/db';
 import { config } from '../../config';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../utils/errors';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, TooManyRequestsError } from '../../utils/errors';
 import { calculateDistanceMeters } from '../../utils/geo';
 import { notifyRoles, notifyUser } from '../../services/notification.service';
 import { recordAudit } from '../../utils/audit';
 import { getSocketIO } from '../../sockets/socket.server';
+import { PingThrottle } from '../../utils/pingThrottle';
 
 // A double-tap or a flaky connection retry shouldn't create two separate
 // incidents for the same emergency — if this user already has an active
@@ -23,6 +24,9 @@ const ACTIVE_EMERGENCY_STATUSES: EmergencyStatus[] = [
   EmergencyStatus.ON_THE_WAY,
   EmergencyStatus.ARRIVED,
 ];
+
+// One GPS ping per second per incident is plenty for live tracking.
+const locationPingThrottle = new PingThrottle(1_000);
 
 const RESPONDER_ROLES: Role[] = [Role.MEDICAL_STAFF, Role.AMBULANCE_RESPONDER, Role.ADMIN];
 
@@ -171,13 +175,17 @@ export class MedicalService {
   }
 
   // --- EMERGENCY LOCATION TRACKING (basic scaffold) ---
-  // TODO: throttle pings per emergency and cap the stored trail length.
+  // TODO: cap the stored trail length.
   async recordLocationPing(emergencyId: string, userId: string, fix: { latitude: number; longitude: number; accuracyM?: number }) {
     const emergency = await prisma.emergency.findUnique({ where: { id: emergencyId } });
     if (!emergency) throw new NotFoundError('Emergency incident not found');
     if (emergency.userId !== userId) throw new ForbiddenError('Only the reporter can share location for this incident');
     if (!ACTIVE_EMERGENCY_STATUSES.includes(emergency.status)) {
+      locationPingThrottle.release(emergencyId);
       throw new ConflictError('This incident is no longer active');
+    }
+    if (!locationPingThrottle.tryAcquire(emergencyId)) {
+      throw new TooManyRequestsError('Location updates are limited to one per second');
     }
 
     const ping = await prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } });
