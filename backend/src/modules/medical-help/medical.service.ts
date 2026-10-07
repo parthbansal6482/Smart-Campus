@@ -27,6 +27,8 @@ const ACTIVE_EMERGENCY_STATUSES: EmergencyStatus[] = [
 
 // One GPS ping per second per incident is plenty for live tracking.
 const locationPingThrottle = new PingThrottle(1_000);
+/** Most pings kept per incident; older ones are pruned as new ones arrive. */
+const MAX_TRAIL_PINGS = 2_000;
 
 const RESPONDER_ROLES: Role[] = [Role.MEDICAL_STAFF, Role.AMBULANCE_RESPONDER, Role.ADMIN];
 
@@ -175,7 +177,6 @@ export class MedicalService {
   }
 
   // --- EMERGENCY LOCATION TRACKING (basic scaffold) ---
-  // TODO: cap the stored trail length.
   async recordLocationPing(emergencyId: string, userId: string, fix: { latitude: number; longitude: number; accuracyM?: number }) {
     const emergency = await prisma.emergency.findUnique({ where: { id: emergencyId } });
     if (!emergency) throw new NotFoundError('Emergency incident not found');
@@ -189,6 +190,7 @@ export class MedicalService {
     }
 
     const ping = await prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } });
+    await this.pruneLocationTrail(emergencyId);
 
     // Live-update anyone watching this incident (responders, the reporter).
     try {
@@ -198,6 +200,20 @@ export class MedicalService {
     }
 
     return ping;
+  }
+
+  private async pruneLocationTrail(emergencyId: string) {
+    const oldestKept = await prisma.emergencyLocationPing.findFirst({
+      where: { emergencyId },
+      orderBy: { recordedAt: 'desc' },
+      skip: MAX_TRAIL_PINGS,
+      select: { recordedAt: true },
+    });
+    if (oldestKept) {
+      await prisma.emergencyLocationPing.deleteMany({
+        where: { emergencyId, recordedAt: { lte: oldestKept.recordedAt } },
+      });
+    }
   }
 
   async getLocationTrail(emergencyId: string, actor: { userId: string; role: Role }, limit = 100) {
