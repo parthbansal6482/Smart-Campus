@@ -30,6 +30,18 @@ export const createMenuItemSchema = z.object({
   }),
 });
 
+// On update, null clears a previously stored value (omitting a field leaves it unchanged).
+const clearable = {
+  servingSize: nutritionFields.servingSize.nullable(),
+  calories: nutritionFields.calories.nullable(),
+  proteinG: nutritionFields.proteinG.nullable(),
+  carbsG: nutritionFields.carbsG.nullable(),
+  fatG: nutritionFields.fatG.nullable(),
+  fiberG: nutritionFields.fiberG.nullable(),
+  sugarG: nutritionFields.sugarG.nullable(),
+  sodiumMg: nutritionFields.sodiumMg.nullable(),
+};
+
 export const updateMenuItemSchema = z.object({
   body: z.object({
     name: z.string().min(2).optional(),
@@ -42,6 +54,7 @@ export const updateMenuItemSchema = z.object({
     isAvailable: z.boolean().optional(),
     imageUrl: z.string().url().optional(),
     ...nutritionFields,
+    ...clearable,
   }),
 });
 

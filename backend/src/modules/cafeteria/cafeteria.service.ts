@@ -24,6 +24,10 @@ export interface MenuItemDetails {
   allergens: string[];
 }
 
+/** Scalar nutrition fields that an update may reset to null. */
+type ClearableDetail = 'servingSize' | 'calories' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'sugarG' | 'sodiumMg';
+type ClearableDetails = { [K in ClearableDetail]?: MenuItemDetails[K] | null };
+
 export class CafeteriaService {
   // Menu items
   async getMenu(category?: MenuCategory, isVeg?: boolean, search?: string) {
@@ -71,7 +75,8 @@ export class CafeteriaService {
       isAvailable: boolean;
       imageUrl: string;
     }> &
-      Partial<MenuItemDetails>
+      Partial<Omit<MenuItemDetails, ClearableDetail>> &
+      ClearableDetails
   ) {
     const item = await prisma.menuItem.findUnique({ where: { id } });
     if (!item) throw new NotFoundError('Menu item not found');
