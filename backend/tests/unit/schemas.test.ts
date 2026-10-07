@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createMenuItemSchema } from '../../src/modules/cafeteria/cafeteria.schema';
+import { createMenuItemSchema, updateMenuItemSchema } from '../../src/modules/cafeteria/cafeteria.schema';
 import { emergencyLocationPingSchema } from '../../src/modules/medical-help/medical.schema';
 
 describe('createMenuItemSchema nutrition fields', () => {
@@ -24,6 +24,18 @@ describe('createMenuItemSchema nutrition fields', () => {
   it('rejects non-URL gallery entries and blank ingredients', () => {
     expect(createMenuItemSchema.safeParse({ body: { ...base, galleryUrls: ['not-a-url'] } }).success).toBe(false);
     expect(createMenuItemSchema.safeParse({ body: { ...base, ingredients: ['  '] } }).success).toBe(false);
+  });
+});
+
+describe('updateMenuItemSchema nutrition fields', () => {
+  it('lets scalar nutrition facts be cleared with null', () => {
+    const r = updateMenuItemSchema.safeParse({ body: { calories: null, proteinG: null, servingSize: null } });
+    expect(r.success).toBe(true);
+  });
+
+  it('still rejects out-of-range values and null arrays', () => {
+    expect(updateMenuItemSchema.safeParse({ body: { calories: 9999 } }).success).toBe(false);
+    expect(updateMenuItemSchema.safeParse({ body: { allergens: null } }).success).toBe(false);
   });
 });
 
