@@ -1,18 +1,25 @@
 import { api } from './api';
 import { ApiResponse, MenuItem, Order, OrderStatus } from '../types';
 
+type ClearableField = 'servingSize' | 'calories' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'sugarG' | 'sodiumMg';
+
+/** Menu item payload where the optional nutrition scalars may be null (clears the stored value on update). */
+export type MenuItemInput = Partial<Omit<MenuItem, ClearableField>> & {
+  [K in ClearableField]?: MenuItem[K] | null;
+};
+
 export const cafeteriaService = {
   getMenu: async (category?: string): Promise<MenuItem[]> => {
     const res = await api.get<ApiResponse<MenuItem[]>>('/cafeteria/menu', { params: { category } });
     return res.data.data;
   },
 
-  createMenuItem: async (item: Partial<MenuItem>): Promise<MenuItem> => {
+  createMenuItem: async (item: MenuItemInput): Promise<MenuItem> => {
     const res = await api.post<ApiResponse<MenuItem>>('/cafeteria/menu', item);
     return res.data.data;
   },
 
-  updateMenuItem: async (id: string, item: Partial<MenuItem>): Promise<MenuItem> => {
+  updateMenuItem: async (id: string, item: MenuItemInput): Promise<MenuItem> => {
     const res = await api.patch<ApiResponse<MenuItem>>(`/cafeteria/menu/${id}`, item);
     return res.data.data;
   },

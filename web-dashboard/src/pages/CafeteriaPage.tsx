@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ChefHat, Plus, Soup } from 'lucide-react';
-import { cafeteriaService } from '../services/cafeteria.service';
+import { cafeteriaService, MenuItemInput } from '../services/cafeteria.service';
 import { REALTIME_EVENTS } from '../services/socket';
 import { MenuCategory, MenuItem, Order, OrderStatus } from '../types';
 import { Card } from '../components/ui/Card';
@@ -203,7 +203,9 @@ export const CafeteriaPage: React.FC = () => {
     e.preventDefault();
     if (!form) return;
     setSaving(true);
-    const payload: Partial<MenuItem> = {
+    // When editing, a blank nutrition field is sent as null so the stored value is cleared.
+    const blank = form.id ? null : undefined;
+    const payload: MenuItemInput = {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       category: form.category,
@@ -212,14 +214,14 @@ export const CafeteriaPage: React.FC = () => {
       spiceLevel: parseInt(form.spiceLevel, 10),
       imageUrl: form.photos[0],
       galleryUrls: form.photos.slice(1),
-      servingSize: form.servingSize.trim() || undefined,
-      calories: toNumber(form.calories),
-      proteinG: toNumber(form.proteinG),
-      carbsG: toNumber(form.carbsG),
-      fatG: toNumber(form.fatG),
-      fiberG: toNumber(form.fiberG),
-      sugarG: toNumber(form.sugarG),
-      sodiumMg: toNumber(form.sodiumMg),
+      servingSize: form.servingSize.trim() || blank,
+      calories: toNumber(form.calories) ?? blank,
+      proteinG: toNumber(form.proteinG) ?? blank,
+      carbsG: toNumber(form.carbsG) ?? blank,
+      fatG: toNumber(form.fatG) ?? blank,
+      fiberG: toNumber(form.fiberG) ?? blank,
+      sugarG: toNumber(form.sugarG) ?? blank,
+      sodiumMg: toNumber(form.sodiumMg) ?? blank,
       ingredients: toList(form.ingredients),
       allergens: toList(form.allergens),
     };
