@@ -14,6 +14,24 @@ export const medicalService = {
     return res.data.data;
   },
 
+  triggerEmergency: async (data: {
+    latitude: number;
+    longitude: number;
+    locationDetail?: string;
+    tag?: Emergency['tag'];
+  }): Promise<Emergency> => {
+    const res = await api.post<{ success: boolean; data: Emergency }>('/medical-help/emergencies/trigger', data);
+    return res.data.data;
+  },
+
+  cancelEmergency: async (emergencyId: string): Promise<Emergency> => {
+    const res = await api.patch<{ success: boolean; data: Emergency }>(
+      `/medical-help/emergencies/${emergencyId}/status`,
+      { status: 'CANCELLED' }
+    );
+    return res.data.data;
+  },
+
   sendEmergencyLocation: async (
     emergencyId: string,
     fix: { latitude: number; longitude: number; accuracyM?: number }

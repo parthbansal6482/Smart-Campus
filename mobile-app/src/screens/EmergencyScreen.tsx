@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Check, MapPin, Phone, X } from 'lucide-react-native';
@@ -9,9 +10,11 @@ import { Button } from '../components/Button';
 import { Chips } from '../components/Chips';
 import { colors, fonts, radius, spacing } from '../theme';
 import { formatTime } from '../lib/format';
+import { medicalService } from '../services/medical.service';
+import { emergencyTracking } from '../services/emergencyTracking';
 
-type Phase = 'ready' | 'countdown' | 'sent';
-type Tag = 'NONE' | 'INJURY' | 'FAINTED' | 'ALLERGIC_REACTION' | 'BREATHING' | 'OTHER';
+type Phase = 'ready' | 'countdown' | 'sending' | 'sent';
+type Tag = 'NONE' | 'INJURY' | 'FAINTED' | 'ALLERGIC_REACTION' | 'OTHER';
 
 const COUNTDOWN_SECONDS = 3;
 
@@ -21,7 +24,6 @@ const LOCATION = { building: 'RTH Academic Block', detail: 'Ground floor, near R
 const TAGS: { value: Tag; label: string }[] = [
   { value: 'INJURY', label: 'Injury' },
   { value: 'FAINTED', label: 'Fainted' },
-  { value: 'BREATHING', label: 'Trouble breathing' },
   { value: 'ALLERGIC_REACTION', label: 'Allergic reaction' },
   { value: 'OTHER', label: 'Something else' },
 ];
@@ -33,21 +35,49 @@ export const EmergencyScreen: React.FC = () => {
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
   const [tag, setTag] = useState<Tag>('NONE');
   const [sentAt, setSentAt] = useState<Date | null>(null);
+  const [emergencyId, setEmergencyId] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => {
     if (timer.current) clearInterval(timer.current);
+    emergencyTracking.stop();
   }, []);
 
-  const startCountdown = () => {
+  const sendAlert = async () => {
+    setPhase('sending');
+    try {
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const emergency = await medicalService.triggerEmergency({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        locationDetail: LOCATION.detail,
+        tag: tag === 'NONE' ? undefined : tag,
+      });
+
+      setEmergencyId(emergency.id);
+      setSentAt(new Date());
+      setPhase('sent');
+      await emergencyTracking.start(emergency.id);
+    } catch {
+      setPhase('ready');
+      Alert.alert('Couldn’t send alert', 'Please try again or call campus security directly.');
+    }
+  };
+
+  const startCountdown = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Location access is needed', 'Allow location access so responders can find you, or call campus security directly.');
+      return;
+    }
+
     setPhase('countdown');
     setSecondsLeft(COUNTDOWN_SECONDS);
     timer.current = setInterval(() => {
       setSecondsLeft(s => {
         if (s <= 1) {
           if (timer.current) clearInterval(timer.current);
-          setPhase('sent');
-          setSentAt(new Date());
+          void sendAlert();
           return 0;
         }
         return s - 1;
@@ -65,7 +95,17 @@ export const EmergencyScreen: React.FC = () => {
   const cancelAlert = () =>
     Alert.alert('Cancel the alert?', 'Only cancel if you no longer need help.', [
       { text: 'Keep alert', style: 'cancel' },
-      { text: 'I’m safe, cancel', style: 'destructive', onPress: () => navigation.goBack() },
+      {
+        text: 'I’m safe, cancel',
+        style: 'destructive',
+        onPress: async () => {
+          if (emergencyId) {
+            await medicalService.cancelEmergency(emergencyId).catch(() => undefined);
+          }
+          emergencyTracking.stop();
+          navigation.goBack();
+        },
+      },
     ]);
 
   return (
@@ -91,11 +131,13 @@ export const EmergencyScreen: React.FC = () => {
         <>
           <View>
             <AppText variant="display">
-              {phase === 'countdown' ? 'Sending alert…' : 'Get medical help'}
+              {phase === 'countdown' ? 'Sending alert…' : phase === 'sending' ? 'Contacting the medical team…' : 'Get medical help'}
             </AppText>
             <AppText variant="callout" tone="ink3" style={styles.lede}>
               {phase === 'countdown'
                 ? 'Your alert goes out when the countdown ends.'
+                : phase === 'sending'
+                  ? 'We’re sharing your location with campus responders.'
                 : 'We’ll send your location to the campus ambulance and medical team.'}
             </AppText>
           </View>
@@ -125,14 +167,14 @@ export const EmergencyScreen: React.FC = () => {
               </Pressable>
             ) : (
               <View style={[styles.sos, styles.sosCounting]}>
-                <AppText style={[styles.sosText, { color: colors.critical }]}>{secondsLeft}</AppText>
+                <AppText style={[styles.sosText, { color: colors.critical }]}>{phase === 'sending' ? '…' : secondsLeft}</AppText>
               </View>
             )}
           </View>
 
           {phase === 'countdown' ? (
             <Button title="Cancel" variant="secondary" onPress={cancelCountdown} />
-          ) : (
+          ) : phase === 'sending' ? null : (
             <View>
               <AppText variant="label" tone="ink3" style={styles.tagLabel}>
                 What’s happening? (optional)

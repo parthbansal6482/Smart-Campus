@@ -1,10 +1,9 @@
 import * as Location from 'expo-location';
 import { medicalService } from './medical.service';
 
-// Basic scaffold for live GPS sharing during an emergency. Not wired into
-// EmergencyScreen yet.
+// Foreground GPS sharing for an active emergency.
 // TODO: background updates (expo-task-manager), battery-aware intervals,
-// offline queueing, and stopping automatically once the incident is closed.
+// and offline queueing. The screen stops tracking when the incident ends.
 
 const PING_INTERVAL_MS = 5_000;
 
