@@ -21,6 +21,7 @@ import { Table, THead, TBody, TR, TH, TD } from '../components/ui/Table';
 import { EmptyState, PageHeader, SkeletonRows } from '../components/ui/Feedback';
 import { toast } from '../components/ui/Toast';
 import { EmergencyProgress } from '../components/common/EmergencyProgress';
+import { EmergencyLiveLocation } from '../components/common/EmergencyLiveLocation';
 import {
   consultationTone,
   emergencyLabel,
@@ -259,6 +260,8 @@ export const MedicalPage: React.FC = () => {
                       {e.description && (
                         <p className="mt-4 text-[13px] text-ink-2 leading-relaxed border-l-2 border-line pl-3">{e.description}</p>
                       )}
+
+                      <EmergencyLiveLocation emergencyId={e.id} />
 
                       <div className="mt-5">
                         <EmergencyProgress status={e.status} />
