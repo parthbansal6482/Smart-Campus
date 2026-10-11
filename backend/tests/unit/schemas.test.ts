@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMenuItemSchema, updateMenuItemSchema } from '../../src/modules/cafeteria/cafeteria.schema';
-import { emergencyLocationPingSchema } from '../../src/modules/medical-help/medical.schema';
+import { emergencyLocationPingSchema, locationTrailQuerySchema } from '../../src/modules/medical-help/medical.schema';
 
 describe('createMenuItemSchema nutrition fields', () => {
   const base = { name: 'Rajma rice', price: 80 };
@@ -47,5 +47,18 @@ describe('emergencyLocationPingSchema', () => {
   it('rejects out-of-range coordinates', () => {
     expect(emergencyLocationPingSchema.safeParse({ body: { latitude: 91, longitude: 0 } }).success).toBe(false);
     expect(emergencyLocationPingSchema.safeParse({ body: { latitude: 0, longitude: -181 } }).success).toBe(false);
+  });
+});
+
+describe('locationTrailQuerySchema', () => {
+  it('accepts no limit or a sensible one', () => {
+    expect(locationTrailQuerySchema.safeParse({ query: {} }).success).toBe(true);
+    expect(locationTrailQuerySchema.safeParse({ query: { limit: '50' } }).success).toBe(true);
+  });
+
+  it('rejects zero, huge or non-numeric limits', () => {
+    for (const limit of ['0', '501', 'abc', '1.5']) {
+      expect(locationTrailQuerySchema.safeParse({ query: { limit } }).success).toBe(false);
+    }
   });
 });
