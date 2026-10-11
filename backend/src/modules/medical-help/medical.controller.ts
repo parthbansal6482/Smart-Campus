@@ -60,10 +60,12 @@ export class MedicalController {
 
   async getLocationTrail(req: Request, res: Response, next: NextFunction) {
     try {
-      const trail = await medicalService.getLocationTrail(req.params.id, {
-        userId: req.user!.userId,
-        role: req.user!.role,
-      });
+      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const trail = await medicalService.getLocationTrail(
+        req.params.id,
+        { userId: req.user!.userId, role: req.user!.role },
+        limit
+      );
       return sendSuccess(res, trail, 'Location trail retrieved');
     } catch (error) {
       return next(error);

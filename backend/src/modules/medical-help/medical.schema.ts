@@ -21,6 +21,13 @@ export const emergencyLocationPingSchema = z.object({
   }),
 });
 
+// Optional `?limit=` for the location trail; the service returns the newest N pings.
+export const locationTrailQuerySchema = z.object({
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(500).optional(),
+  }),
+});
+
 export const updateEmergencyStatusSchema = z.object({
   body: z.object({
     status: z.nativeEnum(EmergencyStatus),

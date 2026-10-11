@@ -5,7 +5,7 @@ import { validate } from '../../middleware/validate';
 import {
   triggerEmergencySchema,
   updateEmergencyStatusSchema,
-  emergencyLocationPingSchema,
+  emergencyLocationPingSchema, locationTrailQuerySchema,
   createMedicineSchema,
   updateMedicineSchema,
   createMedicineOrderSchema,
@@ -30,7 +30,7 @@ router.patch(
   medicalController.updateEmergencyStatus
 );
 router.post('/emergencies/:id/location', validate(emergencyLocationPingSchema), medicalController.recordLocationPing);
-router.get('/emergencies/:id/location', medicalController.getLocationTrail);
+router.get('/emergencies/:id/location', validate(locationTrailQuerySchema), medicalController.getLocationTrail);
 
 // Medicine Store Track
 router.get('/medicines', medicalController.getMedicines);
