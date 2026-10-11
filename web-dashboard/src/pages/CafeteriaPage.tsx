@@ -450,6 +450,7 @@ export const CafeteriaPage: React.FC = () => {
                         <div className="min-w-0">
                           <p className={cn('font-medium', item.isAvailable ? 'text-ink' : 'text-ink-3')}>{item.name}</p>
                           {item.description && <p className="text-xs text-ink-3 truncate max-w-[360px]">{item.description}</p>}
+                          {item.calories != null && <p className="text-xs text-ink-3 tabular">{item.calories} kcal</p>}
                         </div>
                       </div>
                     </TD>
