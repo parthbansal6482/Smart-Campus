@@ -159,6 +159,11 @@ const MenuRow: React.FC<MenuRowProps> = ({ item, quantity, last, onOpen, onAdd, 
           </AppText>
         )}
       </AppText>
+      {!!item.allergens?.length && (
+        <AppText variant="caption" tone="ink3" numberOfLines={1} style={styles.allergens}>
+          {`Contains ${item.allergens.join(', ')}`}
+        </AppText>
+      )}
     </View>
 
     {item.imageUrl && (
@@ -220,6 +225,7 @@ const styles = StyleSheet.create({
   name: { flex: 1 },
   description: { marginTop: 4 },
   price: { marginTop: spacing.sm },
+  allergens: { marginTop: spacing.xs },
   rowAction: { minWidth: 72, alignItems: 'flex-end' },
   addButton: {
     height: 34,
