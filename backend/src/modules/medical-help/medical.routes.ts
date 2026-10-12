@@ -5,7 +5,8 @@ import { validate } from '../../middleware/validate';
 import {
   triggerEmergencySchema,
   updateEmergencyStatusSchema,
-  emergencyLocationPingSchema, locationTrailQuerySchema,
+  emergencyLocationPingSchema,
+  locationTrailQuerySchema,
   createMedicineSchema,
   updateMedicineSchema,
   createMedicineOrderSchema,
