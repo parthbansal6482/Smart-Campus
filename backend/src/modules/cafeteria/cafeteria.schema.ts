@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { MenuCategory, OrderStatus, OrderType } from '@prisma/client';
 
 const nutritionFields = {
+  // Portions left today; leave out to not track stock. Update may send null to stop tracking.
+  stock: z.number().int().min(0).max(10_000).optional(),
   galleryUrls: z.array(z.string().url()).max(8).optional(),
   servingSize: z.string().max(60).optional(),
   calories: z.number().int().min(0).max(5000).optional(),
@@ -32,6 +34,7 @@ export const createMenuItemSchema = z.object({
 
 // On update, null clears a previously stored value (omitting a field leaves it unchanged).
 const clearable = {
+  stock: nutritionFields.stock.nullable(),
   servingSize: nutritionFields.servingSize.nullable(),
   calories: nutritionFields.calories.nullable(),
   proteinG: nutritionFields.proteinG.nullable(),
@@ -52,6 +55,8 @@ export const updateMenuItemSchema = z.object({
     spiceLevel: z.number().int().min(0).max(3).optional(),
     rating: z.number().min(0).max(5).optional(),
     isAvailable: z.boolean().optional(),
+    // false restores a dish that was removed from the menu.
+    isArchived: z.boolean().optional(),
     imageUrl: z.string().url().optional(),
     ...nutritionFields,
     ...clearable,
@@ -108,4 +113,49 @@ export const updateOfferSchema = z.object({
     expiresAt: z.string().datetime().nullable().optional(),
     maxRedemptions: z.number().int().positive().nullable().optional(),
   }),
+});
+
+const csv = z
+  .string()
+  .transform(v => v.split(',').map(x => x.trim().toLowerCase()).filter(Boolean))
+  .optional();
+
+const queryBool = z.enum(['true', 'false']).transform(v => v === 'true').optional();
+
+export const MENU_SORTS = ['name', 'price_asc', 'price_desc', 'rating', 'popular', 'calories'] as const;
+
+// Parsed straight from req.query in the controller (validate() only rewrites the body).
+export const menuQuerySchema = z.object({
+  category: z.nativeEnum(MenuCategory).optional(),
+  isVeg: queryBool,
+  search: z.string().trim().max(80).optional(),
+  sort: z.enum(MENU_SORTS).default('name'),
+  maxCalories: z.coerce.number().int().min(0).max(5000).optional(),
+  // Comma-separated allergens to leave out, e.g. "dairy,nuts".
+  excludeAllergens: csv,
+  inStockOnly: queryBool,
+  // Staff only (ignored for everyone else): include dishes that were removed from the menu.
+  includeArchived: queryBool,
+});
+
+export const orderListQuerySchema = z
+  .object({
+    status: z.nativeEnum(OrderStatus).optional(),
+    all: queryBool,
+    // Token (#ORD-0007 or just 7) or, for staff, the customer's name.
+    search: z.string().trim().max(60).optional(),
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+  })
+  .refine(q => !q.from || !q.to || q.from <= q.to, { message: '`from` must not be after `to`', path: ['from'] });
+
+export const upsertReviewSchema = z.object({
+  body: z.object({
+    rating: z.number().int().min(1).max(5),
+    comment: z.string().trim().max(500).optional(),
+  }),
+});
+
+export const reviewListQuerySchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5).optional(),
 });

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createMenuItemSchema, updateMenuItemSchema } from '../../src/modules/cafeteria/cafeteria.schema';
+import {
+  createMenuItemSchema,
+  updateMenuItemSchema,
+  menuQuerySchema,
+  orderListQuerySchema,
+  upsertReviewSchema,
+} from '../../src/modules/cafeteria/cafeteria.schema';
 import { emergencyLocationPingSchema, locationTrailQuerySchema } from '../../src/modules/medical-help/medical.schema';
 
 describe('createMenuItemSchema nutrition fields', () => {
@@ -60,5 +66,47 @@ describe('locationTrailQuerySchema', () => {
     for (const limit of ['0', '501', 'abc', '1.5']) {
       expect(locationTrailQuerySchema.safeParse({ query: { limit } }).success).toBe(false);
     }
+  });
+});
+
+describe('menuQuerySchema', () => {
+  it('defaults the sort and parses filters', () => {
+    const r = menuQuerySchema.parse({ isVeg: 'true', maxCalories: '400', excludeAllergens: 'Dairy, nuts ,' });
+    expect(r.sort).toBe('name');
+    expect(r.isVeg).toBe(true);
+    expect(r.maxCalories).toBe(400);
+    expect(r.excludeAllergens).toEqual(['dairy', 'nuts']);
+  });
+
+  it('rejects an unknown sort and a bad boolean', () => {
+    expect(menuQuerySchema.safeParse({ sort: 'cheapest' }).success).toBe(false);
+    expect(menuQuerySchema.safeParse({ isVeg: 'yes' }).success).toBe(false);
+  });
+});
+
+describe('orderListQuerySchema', () => {
+  it('rejects an inverted date range', () => {
+    const r = orderListQuerySchema.safeParse({ from: '2026-10-12T00:00:00Z', to: '2026-10-01T00:00:00Z' });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts status, search and a valid range', () => {
+    const r = orderListQuerySchema.safeParse({ status: 'READY', search: '#ORD-0007', from: '2026-10-01T00:00:00Z', to: '2026-10-12T00:00:00Z' });
+    expect(r.success).toBe(true);
+  });
+});
+
+describe('upsertReviewSchema', () => {
+  it('requires a 1-5 whole-number rating', () => {
+    expect(upsertReviewSchema.safeParse({ body: { rating: 5, comment: 'Great' } }).success).toBe(true);
+    for (const rating of [0, 6, 3.5]) expect(upsertReviewSchema.safeParse({ body: { rating } }).success).toBe(false);
+  });
+});
+
+describe('menu stock', () => {
+  it('can be set on create, cleared with null on update, but not negative', () => {
+    expect(createMenuItemSchema.safeParse({ body: { name: 'Samosa', price: 20, stock: 40 } }).success).toBe(true);
+    expect(updateMenuItemSchema.safeParse({ body: { stock: null } }).success).toBe(true);
+    expect(updateMenuItemSchema.safeParse({ body: { stock: -1 } }).success).toBe(false);
   });
 });
