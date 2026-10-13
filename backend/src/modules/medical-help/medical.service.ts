@@ -5,6 +5,8 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, TooManyR
 import { calculateDistanceMeters } from '../../utils/geo';
 import { notifyRoles, notifyUser } from '../../services/notification.service';
 import { recordAudit } from '../../utils/audit';
+import { settingsService } from '../settings/settings.service';
+import { MEDICAL_ROLES, PHARMACY_ROLES, publishChange } from '../../sockets/liveSync';
 import { getSocketIO } from '../../sockets/socket.server';
 import { PingThrottle } from '../../utils/pingThrottle';
 
@@ -95,7 +97,7 @@ export class MedicalService {
       // Only auto-attach a building if the report is plausibly inside it —
       // otherwise leave it unmatched rather than pointing responders at the
       // wrong building.
-      if (nearest && minDistance <= config.campus.buildingMatchRadiusMeters) {
+      if (nearest && minDistance <= (await settingsService.getAll()).buildingMatchRadiusMeters) {
         resolvedBuildingId = nearest.id;
       }
     }
@@ -122,6 +124,7 @@ export class MedicalService {
     });
 
     await recordAudit({ actorId: userId, action: 'emergency.trigger', targetType: 'Emergency', targetId: emergency.id });
+    publishChange('emergencies', { users: [userId], roles: MEDICAL_ROLES }, 'created', [emergency.id]);
 
     return emergency;
   }
@@ -172,6 +175,8 @@ export class MedicalService {
       targetId: id,
       metadata: { from: emergency.status, to: status },
     });
+
+    publishChange('emergencies', { users: [emergency.userId], roles: MEDICAL_ROLES }, 'updated', [id]);
 
     return updated;
   }
@@ -252,7 +257,9 @@ export class MedicalService {
     requiresPrescription: boolean;
     imageUrl?: string;
   }) {
-    return prisma.medicine.create({ data });
+    const medicine = await prisma.medicine.create({ data });
+    publishChange('medicines', { all: true }, 'created', [medicine.id]);
+    return medicine;
   }
 
   async updateMedicine(
@@ -270,14 +277,18 @@ export class MedicalService {
   ) {
     const medicine = await prisma.medicine.findUnique({ where: { id } });
     if (!medicine) throw new NotFoundError('Medicine not found');
-    return prisma.medicine.update({ where: { id }, data });
+    const updated = await prisma.medicine.update({ where: { id }, data });
+    publishChange('medicines', { all: true }, 'updated', [id]);
+    return updated;
   }
 
   /** Archives rather than deletes, so historical order line items keep referring to a real record. */
   async archiveMedicine(id: string) {
     const medicine = await prisma.medicine.findUnique({ where: { id } });
     if (!medicine) throw new NotFoundError('Medicine not found');
-    return prisma.medicine.update({ where: { id }, data: { isArchived: true } });
+    const archived = await prisma.medicine.update({ where: { id }, data: { isArchived: true } });
+    publishChange('medicines', { all: true }, 'deleted', [id]);
+    return archived;
   }
 
   async getMedicineOrders(params: { userId?: string; skip: number; take: number }) {
@@ -358,6 +369,9 @@ export class MedicalService {
       body: `Order #${order.orderNumber} placed`,
       data: { medicineOrderId: order.id },
     });
+    publishChange('medicineOrders', { users: [userId], roles: PHARMACY_ROLES }, 'created', [order.id]);
+    // Placing the order reserved stock, which everyone browsing the pharmacy sees.
+    publishChange('medicines', { all: true }, 'updated', orderItemsData.map(i => i.medicineId));
 
     return order;
   }
@@ -408,6 +422,10 @@ export class MedicalService {
       body: `Your order #${order.orderNumber} is now ${status.toLowerCase()}`,
       data: { medicineOrderId: id, status },
     });
+    publishChange('medicineOrders', { users: [order.userId], roles: PHARMACY_ROLES }, 'updated', [id]);
+    if (status === MedicineOrderStatus.CANCELLED) {
+      publishChange('medicines', { all: true }, 'updated', existing.items.map(i => i.medicineId));
+    }
 
     return order;
   }
@@ -446,6 +464,7 @@ export class MedicalService {
       body: `${consultation.user.name} requested a ${data.type.toLowerCase()}`,
       data: { consultationId: consultation.id },
     });
+    publishChange('consultations', { users: [userId], roles: PHARMACY_ROLES }, 'created', [consultation.id]);
 
     return consultation;
   }
@@ -464,6 +483,7 @@ export class MedicalService {
       body: `Your request is now ${status.toLowerCase()}`,
       data: { consultationId: id, status },
     });
+    publishChange('consultations', { users: [consultation.userId], roles: PHARMACY_ROLES }, 'updated', [id]);
 
     return consultation;
   }

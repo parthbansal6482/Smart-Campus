@@ -1,8 +1,10 @@
 import { prisma } from '../../config/db';
 import { BookingStatus, Role } from '@prisma/client';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../utils/errors';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../utils/errors';
 import { recordAudit } from '../../utils/audit';
 import { getSocketIO } from '../../sockets/socket.server';
+import { settingsService } from '../settings/settings.service';
+import { BOOKING_VIEWERS, publishChange } from '../../sockets/liveSync';
 
 interface DaySegment {
   dayOfWeek: number;
@@ -57,7 +59,9 @@ export class ClassroomsService {
   }
 
   async createBuilding(data: { name: string; code: string; latitude: number; longitude: number; floorCount?: number }) {
-    return prisma.building.create({ data });
+    const building = await prisma.building.create({ data });
+    publishChange('buildings', { all: true }, 'created', [building.id]);
+    return building;
   }
 
   // Rooms
@@ -131,7 +135,9 @@ export class ClassroomsService {
   }
 
   async createRoom(data: { buildingId: string; roomNumber: string; floor: number; capacity: number; hasAC?: boolean; hasProjector?: boolean }) {
-    return prisma.room.create({ data });
+    const room = await prisma.room.create({ data });
+    publishChange('rooms', { all: true }, 'created', [room.id]);
+    return room;
   }
 
   async updateFacilities(id: string, data: { hasAC?: boolean; hasProjector?: boolean; isOccupied?: boolean }, actorId: string) {
@@ -141,6 +147,7 @@ export class ClassroomsService {
     }
 
     const updated = await prisma.room.update({ where: { id }, data });
+    publishChange('rooms', { all: true }, 'updated', [id]);
 
     try {
       getSocketIO().to(`room-${id}`).emit('classroom:occupancy_updated', updated);
@@ -166,7 +173,11 @@ export class ClassroomsService {
     if (!room) {
       throw new NotFoundError('Classroom not found');
     }
-    return prisma.classSchedule.create({ data });
+    const created = await prisma.classSchedule.create({ data });
+    publishChange('schedules', { all: true }, 'created', [created.id]);
+    // A new recurring class changes which rooms are free.
+    publishChange('rooms', { all: true }, 'updated', [data.roomId]);
+    return created;
   }
 
   async updateSchedule(
@@ -177,7 +188,10 @@ export class ClassroomsService {
     if (!schedule) {
       throw new NotFoundError('Schedule entry not found');
     }
-    return prisma.classSchedule.update({ where: { id }, data });
+    const updated = await prisma.classSchedule.update({ where: { id }, data });
+    publishChange('schedules', { all: true }, 'updated', [id]);
+    publishChange('rooms', { all: true }, 'updated', [updated.roomId]);
+    return updated;
   }
 
   async deleteSchedule(id: string) {
@@ -186,6 +200,8 @@ export class ClassroomsService {
       throw new NotFoundError('Schedule entry not found');
     }
     await prisma.classSchedule.delete({ where: { id } });
+    publishChange('schedules', { all: true }, 'deleted', [id]);
+    publishChange('rooms', { all: true }, 'updated', [schedule.roomId]);
   }
 
   // Bookings
@@ -216,6 +232,11 @@ export class ClassroomsService {
       throw new NotFoundError('Classroom not found');
     }
 
+    const { maxBookingDaysAhead } = await settingsService.getAll();
+    if (start.getTime() > Date.now() + maxBookingDaysAhead * 24 * 60 * 60 * 1000) {
+      throw new BadRequestError(`Rooms can be booked up to ${maxBookingDaysAhead} days ahead`);
+    }
+
     // Recurring-schedule conflicts are checked at the application level;
     // one-off booking conflicts are additionally enforced by a Postgres
     // EXCLUDE constraint (see the init_hardened_schema migration), which is
@@ -243,6 +264,9 @@ export class ClassroomsService {
       });
 
       await recordAudit({ actorId: userId, action: 'booking.create', targetType: 'Booking', targetId: booking.id });
+      publishChange('bookings', { users: [userId], roles: BOOKING_VIEWERS }, 'created', [booking.id]);
+      // Availability of the room changed for everyone looking at the room list.
+      publishChange('rooms', { all: true }, 'updated', [booking.roomId]);
       return booking;
     } catch (error) {
       if (error instanceof Error && /exclusion constraint/i.test(error.message)) {
@@ -284,6 +308,8 @@ export class ClassroomsService {
       targetId: id,
       metadata: { from: booking.status, to: status },
     });
+    publishChange('bookings', { users: [booking.userId], roles: BOOKING_VIEWERS }, 'updated', [id]);
+    publishChange('rooms', { all: true }, 'updated', [booking.roomId]);
 
     return updated;
   }
