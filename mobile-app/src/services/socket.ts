@@ -40,6 +40,69 @@ export const connectSocket = async (): Promise<Socket | null> => {
     }
   });
 
+  // The server announces which kind of data changed (menu, rooms, bookings, emergencies, users...);
+  // screens subscribe to the matching event and refetch what they show.
+  socket.on('data:changed', (change: { resource: string; ids?: string[] }) => {
+    const { resource, ids = [] } = change;
+    switch (resource) {
+      case 'menu':
+        realtimeEvents.emit(REALTIME_EVENTS.cafeteriaMenuChanged);
+        break;
+      case 'reviews':
+        realtimeEvents.emit(REALTIME_EVENTS.menuReviewsChanged, ids[0]);
+        realtimeEvents.emit(REALTIME_EVENTS.cafeteriaMenuChanged);
+        break;
+      case 'rooms':
+      case 'buildings':
+      case 'schedules':
+        realtimeEvents.emit(REALTIME_EVENTS.classroomsChanged);
+        break;
+      case 'bookings':
+        realtimeEvents.emit(REALTIME_EVENTS.bookingsChanged);
+        realtimeEvents.emit(REALTIME_EVENTS.classroomsChanged);
+        break;
+      case 'emergencies':
+      case 'consultations':
+      case 'medicineOrders':
+      case 'medicines':
+        realtimeEvents.emit(REALTIME_EVENTS.medicalChanged);
+        break;
+      case 'users':
+        realtimeEvents.emit(REALTIME_EVENTS.usersChanged, ids);
+        break;
+      case 'notifications':
+        realtimeEvents.emit(REALTIME_EVENTS.notificationsChanged);
+        break;
+      case 'settings':
+        realtimeEvents.emit(REALTIME_EVENTS.settingsChanged);
+        break;
+    }
+  });
+
+  // Events can be missed while offline: when the socket (re)connects, refetch everything.
+  socket.on('connect', () => {
+    realtimeEvents.emit(REALTIME_EVENTS.cafeteriaOrdersChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.cafeteriaMenuChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.menuReviewsChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.classroomsChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.medicalChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.bookingsChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.usersChanged, []);
+    realtimeEvents.emit(REALTIME_EVENTS.notificationsChanged);
+    realtimeEvents.emit(REALTIME_EVENTS.settingsChanged);
+  });
+
+  // The server drops our connection when our role or status changes (so rooms are re-derived).
+  // socket.io doesn't retry that kind of disconnect by itself, so reconnect explicitly.
+  socket.on('disconnect', reason => {
+    if (reason === 'io server disconnect') socket?.connect();
+  });
+
+  // The server refuses the handshake for a deactivated account: sign out instead of retrying forever.
+  socket.on('connect_error', (error: Error) => {
+    if (/deactivated/i.test(error.message)) realtimeEvents.emit('account-deactivated');
+  });
+
   socket.on('order:new', () => realtimeEvents.emit(REALTIME_EVENTS.cafeteriaOrdersChanged));
   socket.on('order:status_updated', () => realtimeEvents.emit(REALTIME_EVENTS.cafeteriaOrdersChanged));
   socket.on('classroom:occupancy_updated', () => realtimeEvents.emit(REALTIME_EVENTS.classroomsChanged));

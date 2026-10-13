@@ -23,6 +23,14 @@ export const realtimeEvents = new RealtimeEvents();
 
 export const REALTIME_EVENTS = {
   cafeteriaOrdersChanged: 'cafeteria-orders-changed',
+  cafeteriaMenuChanged: 'cafeteria-menu-changed',
+  /** Payload: the id of the dish whose reviews changed. */
+  menuReviewsChanged: 'menu-reviews-changed',
   classroomsChanged: 'classrooms-changed',
   medicalChanged: 'medical-changed',
+  bookingsChanged: 'bookings-changed',
+  /** Payload: the ids of the users that changed. */
+  usersChanged: 'users-changed',
+  notificationsChanged: 'notifications-changed',
+  settingsChanged: 'settings-changed',
 } as const;

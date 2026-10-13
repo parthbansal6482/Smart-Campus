@@ -58,6 +58,13 @@ export const medicalService = {
     return res.data.data;
   },
 
+  cancelMedicineOrder: async (id: string): Promise<MedicineOrder> => {
+    const res = await api.patch<{ success: boolean; data: MedicineOrder }>(`/medical-help/medicine-orders/${id}/status`, {
+      status: 'CANCELLED',
+    });
+    return res.data.data;
+  },
+
   getMyConsultations: async (): Promise<Consultation[]> => {
     const res = await api.get<{ success: boolean; data: Consultation[] }>('/medical-help/consultations');
     return res.data.data;

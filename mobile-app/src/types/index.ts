@@ -116,7 +116,25 @@ export interface Consultation {
 
 export type MenuCategory = 'BREAKFAST' | 'LUNCH' | 'SNACKS' | 'BEVERAGES' | 'DESSERTS' | 'SPECIAL';
 
+export interface MenuReview {
+  id: string;
+  rating: number;
+  comment?: string | null;
+  createdAt: string;
+  user: { id: string; name: string };
+}
+
+export interface ReorderLine {
+  menuItem: MenuItem;
+  quantity: number;
+  previousUnitPrice: number;
+  available: boolean;
+}
+
 export interface MenuItem {
+  /** Portions left today; absent when stock isn't tracked. */
+  stock?: number | null;
+  reviewCount?: number;
   id: string;
   name: string;
   description?: string;
@@ -183,6 +201,9 @@ export type RootStackParamList = {
   Cart: undefined;
   OrderTrack: { order?: Order };
   Orders: { placedOrderId?: string } | undefined;
+  Bookings: undefined;
+  HealthRequests: undefined;
+  Notifications: undefined;
 };
 
 export type MainTabParamList = {
@@ -197,3 +218,23 @@ export type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
 };
+
+export interface AppNotification {
+  id: string;
+  type: 'EMERGENCY' | 'BOOKING' | 'ORDER' | 'MEDICINE_ORDER' | 'CONSULTATION' | 'SYSTEM';
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface CampusSettings {
+  securityPhone: string;
+  medicalCenterPhone: string;
+  medicalCenterLocation: string;
+  /** HH:MM, or empty when the kitchen has no set hours. */
+  cafeteriaOpensAt: string;
+  cafeteriaClosesAt: string;
+  buildingMatchRadiusMeters: number;
+  maxBookingDaysAhead: number;
+}

@@ -5,6 +5,7 @@ import { authService } from '../services/auth.service';
 import { tokenStorage, setUnauthorizedHandler, USER_STORAGE_KEY } from '../services/api';
 import { registerForPushNotifications, unregisterPushNotifications } from '../services/pushNotifications';
 import { connectSocket, disconnectSocket } from '../services/socket';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 
 interface AuthState {
   user: User | null;
@@ -14,12 +15,24 @@ interface AuthState {
   register: (data: { name: string; email: string; password: string; phone?: string }) => Promise<void>;
   logout: () => Promise<void>;
   loadSession: () => Promise<void>;
+  /** Re-reads the signed-in user's profile; a failure never signs them out. */
+  refreshUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>(set => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+
+  refreshUser: async () => {
+    try {
+      const user = await authService.getMe();
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      set({ user });
+    } catch {
+      /* keep the profile we have; the next change or reconnect retries */
+    }
+  },
 
   loadSession: async () => {
     try {
@@ -84,4 +97,16 @@ export const useAuthStore = create<AuthState>(set => ({
 // not about the store itself.
 setUnauthorizedHandler(() => {
   useAuthStore.setState({ user: null, isAuthenticated: false });
+});
+
+// An admin changing this account's name, role or status (or another device editing the profile)
+// shows up here without signing out and back in.
+realtimeEvents.on(REALTIME_EVENTS.usersChanged, (ids?: string[]) => {
+  const me = useAuthStore.getState().user;
+  if (me && (!ids?.length || ids.includes(me.id))) void useAuthStore.getState().refreshUser();
+});
+
+// The server refuses the realtime handshake for a deactivated account: sign out rather than leave a dead session.
+realtimeEvents.on('account-deactivated', () => {
+  if (useAuthStore.getState().isAuthenticated) void useAuthStore.getState().logout();
 });
