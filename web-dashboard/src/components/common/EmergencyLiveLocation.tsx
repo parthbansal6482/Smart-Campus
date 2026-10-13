@@ -2,13 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { ExternalLink, Navigation } from 'lucide-react';
 import { EmergencyLocationPing } from '../../types';
 import { medicalService } from '../../services/medical.service';
+import { getSocket } from '../../services/socket';
 import { timeAgo } from '../../lib/utils';
 
-const POLL_MS = 10_000;
+// Pings arrive over the socket; this slow poll only covers a missed message.
+const POLL_MS = 30_000;
 
 /** Latest GPS fix shared by the reporter of an active incident, refreshed while it is on screen. */
 export const EmergencyLiveLocation: React.FC<{ emergencyId: string }> = ({ emergencyId }) => {
   const [latest, setLatest] = useState<EmergencyLocationPing | null>(null);
+  // Re-render periodically so "2 min ago" keeps counting between pings.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 15_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -22,9 +30,22 @@ export const EmergencyLiveLocation: React.FC<{ emergencyId: string }> = ({ emerg
     };
     load();
     const interval = setInterval(load, POLL_MS);
+
+    // Join the incident's room to receive each GPS ping as it is recorded (and again after a reconnect).
+    const socket = getSocket();
+    const join = () => socket?.emit('emergency:join_incident', emergencyId);
+    const onPing = (ping: EmergencyLocationPing) => {
+      if (ping.emergencyId === emergencyId) setLatest(prev => (!prev || ping.recordedAt >= prev.recordedAt ? ping : prev));
+    };
+    join();
+    socket?.on('connect', join);
+    socket?.on('emergency:reporter_location_updated', onPing);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
+      socket?.off('connect', join);
+      socket?.off('emergency:reporter_location_updated', onPing);
     };
   }, [emergencyId]);
 

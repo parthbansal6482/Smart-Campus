@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { REALTIME_EVENTS } from '../services/socket';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, MapPin, RefreshCw, ShieldCheck, UtensilsCrossed, DoorOpen } from 'lucide-react';
 import { classroomService } from '../services/classroom.service';
@@ -47,8 +48,27 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    // Polling is only a safety net; every kind of change the overview summarises triggers a refetch.
     const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
+    const live = [
+      REALTIME_EVENTS.classroomsChanged,
+      REALTIME_EVENTS.medicalChanged,
+      REALTIME_EVENTS.cafeteriaOrdersChanged,
+      REALTIME_EVENTS.usersChanged,
+    ];
+    // Several events often land together (an order touches orders, stock and notifications):
+    // coalesce them into one refetch.
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const onChange = () => {
+      clearTimeout(pending);
+      pending = setTimeout(fetchData, 400);
+    };
+    live.forEach(name => window.addEventListener(name, onChange));
+    return () => {
+      clearInterval(interval);
+      clearTimeout(pending);
+      live.forEach(name => window.removeEventListener(name, onChange));
+    };
   }, [fetchData]);
 
   const roomsInUse = rooms.filter(r => r.isOccupied).length;

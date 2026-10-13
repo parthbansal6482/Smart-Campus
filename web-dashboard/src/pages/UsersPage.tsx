@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Users } from 'lucide-react';
 import { usersService } from '../services/users.service';
+import { REALTIME_EVENTS } from '../services/socket';
 import { useAuthStore } from '../store/authStore';
 import { Role, User } from '../types';
 import { Card } from '../components/ui/Card';
@@ -23,13 +24,21 @@ export const UsersPage: React.FC = () => {
   const [pendingChange, setPendingChange] = useState<{ user: User; role: Role } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const loadUsers = useCallback(
+    () =>
+      usersService
+        .getAll()
+        .then(setUsers)
+        .catch(err => toast.error(getErrorMessage(err, 'Couldn’t load people.'))),
+    []
+  );
+
   useEffect(() => {
-    usersService
-      .getAll()
-      .then(setUsers)
-      .catch(err => toast.error(getErrorMessage(err, 'Couldn’t load people.')))
-      .finally(() => setLoading(false));
-  }, []);
+    loadUsers().finally(() => setLoading(false));
+    // Sign-ups, role changes and (de)activations by anyone appear without a reload.
+    window.addEventListener(REALTIME_EVENTS.usersChanged, loadUsers);
+    return () => window.removeEventListener(REALTIME_EVENTS.usersChanged, loadUsers);
+  }, [loadUsers]);
 
   const filtered = users.filter(u => {
     if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;

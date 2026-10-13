@@ -62,35 +62,31 @@ export const MedicalPage: React.FC = () => {
   const [form, setForm] = useState<MedicineForm | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const loadEmergencies = useCallback(async () => {
-    try {
-      setEmergencies(await medicalService.getAllEmergencies(true));
-    } catch {
-      /* keep last known list */
-    }
+  // Emergencies, pharmacy stock and orders, and consultations are all on this page, so any
+  // medical change refetches all four (a failed list just keeps what's on screen).
+  const loadAll = useCallback(async () => {
+    const [em, med, ord, con] = await Promise.allSettled([
+      medicalService.getAllEmergencies(true),
+      medicalService.getMedicines(),
+      medicalService.getMedicineOrders(true),
+      medicalService.getConsultations(true),
+    ]);
+    if (em.status === 'fulfilled') setEmergencies(em.value);
+    if (med.status === 'fulfilled') setMedicines(med.value);
+    if (ord.status === 'fulfilled') setOrders(ord.value);
+    if (con.status === 'fulfilled') setConsultations(con.value);
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const [em, med, ord, con] = await Promise.allSettled([
-        medicalService.getAllEmergencies(true),
-        medicalService.getMedicines(),
-        medicalService.getMedicineOrders(true),
-        medicalService.getConsultations(true),
-      ]);
-      if (em.status === 'fulfilled') setEmergencies(em.value);
-      if (med.status === 'fulfilled') setMedicines(med.value);
-      if (ord.status === 'fulfilled') setOrders(ord.value);
-      if (con.status === 'fulfilled') setConsultations(con.value);
-      setLoading(false);
-    })();
-    const interval = setInterval(loadEmergencies, 20000);
-    window.addEventListener(REALTIME_EVENTS.medicalChanged, loadEmergencies);
+    loadAll().finally(() => setLoading(false));
+    // Polling is only a safety net for a missed socket event.
+    const interval = setInterval(loadAll, 30000);
+    window.addEventListener(REALTIME_EVENTS.medicalChanged, loadAll);
     return () => {
       clearInterval(interval);
-      window.removeEventListener(REALTIME_EVENTS.medicalChanged, loadEmergencies);
+      window.removeEventListener(REALTIME_EVENTS.medicalChanged, loadAll);
     };
-  }, [loadEmergencies]);
+  }, [loadAll]);
 
   const active = emergencies.filter(e => isEmergencyActive(e.status));
   const resolved = emergencies.filter(e => !isEmergencyActive(e.status));
