@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { User, Role } from '../types';
 import { authService } from '../services/auth.service';
 import { tokenStorage, setUnauthorizedHandler, USER_STORAGE_KEY } from '../services/api';
-import { connectSocket, disconnectSocket } from '../services/socket';
+import { connectSocket, disconnectSocket, REALTIME_EVENTS } from '../services/socket';
 
 interface AuthState {
   user: User | null;
@@ -11,6 +11,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  /** Re-reads the signed-in user's profile; unlike checkAuth, a failure never signs them out. */
+  refreshUser: () => Promise<void>;
   hasRole: (roles: Role[]) => boolean;
 }
 
@@ -65,6 +67,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  refreshUser: async () => {
+    try {
+      const user = await authService.getMe();
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      set({ user });
+    } catch {
+      /* keep the profile we have; the next change or reconnect retries */
+    }
+  },
+
   hasRole: (roles: Role[]) => {
     const { user } = get();
     if (!user) return false;
@@ -77,4 +89,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 // not about the store itself.
 setUnauthorizedHandler(() => {
   useAuthStore.setState({ user: null, isAuthenticated: false });
+});
+
+// An admin changing this account's name, role or status (or another device editing the profile)
+// shows up here without signing out and back in.
+window.addEventListener(REALTIME_EVENTS.usersChanged, event => {
+  const ids: string[] | undefined = (event as CustomEvent).detail?.ids;
+  const me = useAuthStore.getState().user;
+  if (me && (!ids?.length || ids.includes(me.id))) void useAuthStore.getState().refreshUser();
+});
+
+window.addEventListener('realtime:account-deactivated', () => {
+  if (useAuthStore.getState().isAuthenticated) void useAuthStore.getState().logout();
 });

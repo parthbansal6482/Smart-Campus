@@ -143,9 +143,14 @@ export interface MenuItem {
   spiceLevel: number;
   rating: number;
   isAvailable: boolean;
+  /** True for dishes removed from the menu (only listed for staff, who can restore them). */
+  isArchived?: boolean;
   imageUrl?: string;
   galleryUrls?: string[];
   servingSize?: string;
+  /** Portions left today; absent when stock isn't tracked. */
+  stock?: number | null;
+  reviewCount?: number;
   calories?: number;
   proteinG?: number;
   carbsG?: number;
@@ -198,4 +203,35 @@ export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
   data: T;
+}
+
+export interface CafeteriaStats {
+  today: {
+    orders: number;
+    revenue: number;
+    avgFulfilmentMinutes: number | null;
+    byStatus: Partial<Record<OrderStatus, number>>;
+  };
+  trend: { date: string; orders: number; revenue: number }[];
+  topItems: { id: string; name: string; quantity: number }[];
+  lowStock: { id: string; name: string; stock: number }[];
+}
+
+export interface MenuReview {
+  id: string;
+  rating: number;
+  comment?: string | null;
+  createdAt: string;
+  user: { id: string; name: string };
+}
+
+export interface CampusSettings {
+  securityPhone: string;
+  medicalCenterPhone: string;
+  medicalCenterLocation: string;
+  /** HH:MM, or empty for no set hours (both must be set for hours to apply). */
+  cafeteriaOpensAt: string;
+  cafeteriaClosesAt: string;
+  buildingMatchRadiusMeters: number;
+  maxBookingDaysAhead: number;
 }
