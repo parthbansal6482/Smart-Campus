@@ -62,6 +62,11 @@ const envSchema = z
     // just left without a matched building rather than guessing wrong.
     BUILDING_MATCH_RADIUS_METERS: z.coerce.number().positive().default(300),
 
+    // Optional cafeteria opening hours (HH:MM, 24h, server local time). When both
+    // are set, a requested pickup time outside them is rejected. Unset = no limit.
+    CAFETERIA_OPENS_AT: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+    CAFETERIA_CLOSES_AT: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+
     APP_BASE_URL: z.string().default('http://localhost:5000'),
     CLIENT_URL: z.string().default('http://localhost:5173'),
   })
