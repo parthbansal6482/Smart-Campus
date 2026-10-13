@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Pill, Search } from 'lucide-react-native';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { medicalService } from '../services/medical.service';
 import { getErrorMessage } from '../lib/format';
 import { Medicine, MedicineCategory } from '../types';
@@ -28,9 +29,15 @@ export const MedicineStoreScreen: React.FC = () => {
   const [placing, setPlacing] = useState(false);
   const [catalog, setCatalog] = useState<Medicine[]>([]);
 
-  useEffect(() => {
+  const loadCatalog = useCallback(() => {
     medicalService.getMedicines().then(setCatalog).catch(() => undefined);
   }, []);
+
+  // Stock and prices change as other people order and staff edit the catalogue.
+  useEffect(() => {
+    loadCatalog();
+    return realtimeEvents.on(REALTIME_EVENTS.medicalChanged, loadCatalog);
+  }, [loadCatalog]);
 
   const medicines = catalog.filter(m => {
     if (category !== 'ALL' && m.category !== category) return false;

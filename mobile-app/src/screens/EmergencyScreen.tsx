@@ -4,14 +4,16 @@ import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Check, MapPin, Phone, X } from 'lucide-react-native';
-import { CAMPUS } from '../data/mock';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Chips } from '../components/Chips';
 import { colors, fonts, radius, spacing } from '../theme';
 import { formatTime } from '../lib/format';
 import { medicalService } from '../services/medical.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
+import { EmergencyStatus } from '../types';
 import { emergencyTracking } from '../services/emergencyTracking';
+import { useCampusStore } from '../store/campusStore';
 
 type Phase = 'ready' | 'countdown' | 'sending' | 'sent';
 type Tag = 'NONE' | 'INJURY' | 'FAINTED' | 'ALLERGIC_REACTION' | 'OTHER';
@@ -36,12 +38,30 @@ export const EmergencyScreen: React.FC = () => {
   const [tag, setTag] = useState<Tag>('NONE');
   const [sentAt, setSentAt] = useState<Date | null>(null);
   const [emergencyId, setEmergencyId] = useState<string | null>(null);
+  const [status, setStatus] = useState<EmergencyStatus>('REPORTED');
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => {
     if (timer.current) clearInterval(timer.current);
     emergencyTracking.stop();
   }, []);
+
+  // Responders moving the incident along (or closing it) shows up here as it happens.
+  useEffect(() => {
+    if (!emergencyId) return;
+    const refresh = () =>
+      medicalService
+        .getMyEmergencies()
+        .then(list => {
+          const mine = list.find(e => e.id === emergencyId);
+          if (!mine) return;
+          setStatus(mine.status);
+          if (mine.status === 'HANDLED' || mine.status === 'CANCELLED') emergencyTracking.stop();
+        })
+        .catch(() => undefined);
+    refresh();
+    return realtimeEvents.on(REALTIME_EVENTS.medicalChanged, refresh);
+  }, [emergencyId]);
 
   const sendAlert = async () => {
     setPhase('sending');
@@ -90,7 +110,12 @@ export const EmergencyScreen: React.FC = () => {
     setPhase('ready');
   };
 
-  const callSecurity = () => Linking.openURL(`tel:${CAMPUS.securityPhone.replace(/\s/g, '')}`);
+  // 0 = waiting, 1 = assigned, 2 = on the way, 3 = arrived or later.
+  const progress = { REPORTED: 0, ASSIGNED: 1, ON_THE_WAY: 2, ARRIVED: 3, HANDLED: 3, CANCELLED: 0 }[status];
+  const headline =
+    status === 'HANDLED' ? 'Handled' : status === 'CANCELLED' ? 'Alert cancelled' : status === 'ARRIVED' ? 'Help has arrived' : status === 'ON_THE_WAY' ? 'Help is on the way' : 'Help is being sent';
+
+  const callSecurity = () => Linking.openURL(`tel:${useCampusStore.getState().settings.securityPhone.replace(/\s/g, '')}`);
 
   const cancelAlert = () =>
     Alert.alert('Cancel the alert?', 'Only cancel if you no longer need help.', [
@@ -189,17 +214,24 @@ export const EmergencyScreen: React.FC = () => {
             <View style={styles.sentIcon}>
               <Check size={24} color={colors.ok} />
             </View>
-            <AppText variant="display">Help is being sent</AppText>
+            <AppText variant="display">{headline}</AppText>
             <AppText variant="callout" tone="ink3" style={styles.lede}>
-              Stay where you are if it’s safe. Keep your phone nearby — a responder may call you.
+              {status === 'HANDLED' || status === 'CANCELLED'
+                ? 'This alert is closed. You can leave this screen.'
+                : 'Stay where you are if it’s safe. Keep your phone nearby — a responder may call you.'}
             </AppText>
           </View>
 
           <View style={styles.timeline}>
             <TimelineStep done title="Alert sent" detail={`${LOCATION.building} · ${sentAt ? formatTime(sentAt) : ''}`} />
-            <TimelineStep current title="Waiting for a responder" detail="The medical team has been notified" />
-            <TimelineStep title="Ambulance on the way" />
-            <TimelineStep title="Arrived" last />
+            <TimelineStep
+              done={progress >= 1}
+              current={progress === 0}
+              title={progress >= 1 ? 'Responder assigned' : 'Waiting for a responder'}
+              detail={progress === 0 ? 'The medical team has been notified' : undefined}
+            />
+            <TimelineStep done={progress >= 2} current={progress === 1} title="Ambulance on the way" />
+            <TimelineStep done={progress >= 3} current={progress === 2} title="Arrived" last />
           </View>
 
           <View style={styles.actions}>

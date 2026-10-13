@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowUpRight, DoorOpen, MessageCircle, Pill, UtensilsCrossed, LucideIcon } from 'lucide-react-native';
+import { ArrowUpRight, Bell, DoorOpen, MessageCircle, Pill, UtensilsCrossed, LucideIcon } from 'lucide-react-native';
 import { useAuthStore } from '../store/authStore';
 import { cafeteriaService } from '../services/cafeteria.service';
 import { classroomService } from '../services/classroom.service';
+import { useCampusStore } from '../store/campusStore';
 import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { MenuItem, Order, Room } from '../types';
 import { AppText } from '../components/AppText';
@@ -25,12 +26,16 @@ interface Action {
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useAuthStore(state => state.user);
+  const unread = useCampusStore(state => state.unreadNotifications);
   const [orders, setOrders] = useState<Order[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
 
   const loadOrders = useCallback(() => {
-    cafeteriaService.getMyOrders().then(setOrders).catch(() => undefined);
+    cafeteriaService.getMyOrders().then(r => setOrders(r.orders)).catch(() => undefined);
+  }, []);
+  const loadMenu = useCallback(() => {
+    cafeteriaService.getMenu().then(setMenu).catch(() => undefined);
   }, []);
   const loadRooms = useCallback(() => {
     classroomService.getRooms().then(setRooms).catch(() => undefined);
@@ -39,14 +44,16 @@ export const HomeScreen: React.FC = () => {
   useEffect(() => {
     loadOrders();
     loadRooms();
-    cafeteriaService.getMenu().then(setMenu).catch(() => undefined);
+    loadMenu();
     const offOrders = realtimeEvents.on(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
+    const offMenu = realtimeEvents.on(REALTIME_EVENTS.cafeteriaMenuChanged, loadMenu);
     const offRooms = realtimeEvents.on(REALTIME_EVENTS.classroomsChanged, loadRooms);
     return () => {
       offOrders();
+      offMenu();
       offRooms();
     };
-  }, [loadOrders, loadRooms]);
+  }, [loadOrders, loadMenu, loadRooms]);
 
   const activeOrder = orders.find(o => o.status !== 'COLLECTED' && o.status !== 'CANCELLED');
   const freeRoom = rooms.find(r => !r.isOccupied);
@@ -66,14 +73,25 @@ export const HomeScreen: React.FC = () => {
       eyebrow={today}
       title={`${greeting()},\n${firstName(user?.name) || 'there'}`}
       headerRight={
-        <Pressable
-          onPress={() => navigation.navigate('ProfileTab')}
-          accessibilityRole="button"
-          accessibilityLabel="Your profile"
-          style={styles.avatar}
-        >
-          <AppText variant="label">{initials(user?.name)}</AppText>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => navigation.navigate('Notifications')}
+            accessibilityRole="button"
+            accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+            style={styles.avatar}
+          >
+            <Bell size={18} color={colors.ink} strokeWidth={1.75} />
+            {unread > 0 && <View style={styles.badge} />}
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('ProfileTab')}
+            accessibilityRole="button"
+            accessibilityLabel="Your profile"
+            style={styles.avatar}
+          >
+            <AppText variant="label">{initials(user?.name)}</AppText>
+          </Pressable>
+        </View>
       }
     >
       <View style={styles.grid}>
@@ -173,6 +191,8 @@ export const HomeScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  headerActions: { flexDirection: 'row', gap: spacing.sm },
+  badge: { position: 'absolute', top: 8, right: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.critical },
   avatar: {
     width: 44,
     height: 44,

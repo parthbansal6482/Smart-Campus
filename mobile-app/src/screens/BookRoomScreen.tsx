@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { classroomService } from '../services/classroom.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { getErrorMessage } from '../lib/format';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -30,7 +31,20 @@ const slotLabel = (hour: number) => formatTime(new Date(2000, 0, 1, hour));
 export const BookRoomScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, 'BookRoom'>>();
-  const room = route.params?.room;
+  const [room, setRoom] = useState(route.params?.room);
+
+  // The room's occupancy, capacity or name can change while this screen is open (staff edits,
+  // another booking) — keep the header current.
+  useEffect(() => {
+    const id = route.params?.room?.id;
+    if (!id) return;
+    return realtimeEvents.on(REALTIME_EVENTS.classroomsChanged, () => {
+      classroomService
+        .getRooms()
+        .then(rooms => setRoom(prev => rooms.find(r => r.id === id) ?? prev))
+        .catch(() => undefined);
+    });
+  }, [route.params?.room?.id]);
 
   const days = useMemo(dayOptions, []);
   const currentHour = new Date().getHours();

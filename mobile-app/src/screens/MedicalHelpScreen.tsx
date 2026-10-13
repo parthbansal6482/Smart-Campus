@@ -4,7 +4,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Building2, MessageCircle, Phone, Pill } from 'lucide-react-native';
 import { RootStackParamList } from '../types';
-import { CAMPUS } from '../data/mock';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -12,9 +11,11 @@ import { ListGroup, ListItem } from '../components/ListItem';
 import { Screen, SectionLabel } from '../components/Screen';
 import { StatusBadge } from '../components/StatusBadge';
 import { colors, radius, spacing } from '../theme';
+import { useCampusStore } from '../store/campusStore';
 
 export const MedicalHelpScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const campus = useCampusStore(state => state.settings);
 
   return (
     <Screen topInset title="Health" subtitle="Emergency help, the campus pharmacy and the medical centre.">
@@ -27,14 +28,14 @@ export const MedicalHelpScreen: React.FC = () => {
         </AppText>
         <Button title="Get emergency help" variant="danger" onPress={() => navigation.navigate('EmergencyModal')} />
         <Pressable
-          onPress={() => Linking.openURL(`tel:${CAMPUS.securityPhone.replace(/\s/g, '')}`)}
+          onPress={() => Linking.openURL(`tel:${campus.securityPhone.replace(/\s/g, '')}`)}
           accessibilityRole="button"
           style={styles.callRow}
           hitSlop={6}
         >
           <Phone size={15} color={colors.critical} />
           <AppText variant="label" tone="critical">
-            Call campus security · {CAMPUS.securityPhone}
+            Call campus security · {campus.securityPhone}
           </AppText>
         </Pressable>
       </View>

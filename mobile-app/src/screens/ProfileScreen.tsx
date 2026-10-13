@@ -1,21 +1,23 @@
 import React from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { CalendarDays, LogOut, Phone, ReceiptText, ShieldCheck } from 'lucide-react-native';
+import { Bell, CalendarDays, LogOut, Pill, Phone, ReceiptText, ShieldCheck } from 'lucide-react-native';
 import { useAuthStore } from '../store/authStore';
-import { CAMPUS } from '../data/mock';
 import { AppText } from '../components/AppText';
 import { Card } from '../components/Card';
 import { ListGroup, ListItem } from '../components/ListItem';
 import { Screen, SectionLabel } from '../components/Screen';
 import { colors, fonts, spacing } from '../theme';
 import { humanize, initials } from '../lib/format';
+import { useCampusStore } from '../store/campusStore';
 
 const icon = (Icon: typeof Phone) => <Icon size={18} color={colors.ink} strokeWidth={1.75} />;
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { user, logout } = useAuthStore();
+  const campus = useCampusStore(state => state.settings);
+  const unread = useCampusStore(state => state.unreadNotifications);
 
   const confirmLogout = () =>
     Alert.alert('Sign out?', 'You’ll need your campus email and password to sign back in.', [
@@ -46,10 +48,22 @@ export const ProfileScreen: React.FC = () => {
       <SectionLabel>Activity</SectionLabel>
       <ListGroup>
         <ListItem
+          icon={icon(Bell)}
+          title="Notifications"
+          subtitle={unread > 0 ? `${unread} unread` : 'Order, booking and health updates'}
+          onPress={() => navigation.navigate('Notifications')}
+        />
+        <ListItem
           icon={icon(CalendarDays)}
           title="Room bookings"
-          subtitle="Find and book a free room"
-          onPress={() => navigation.navigate('ClassroomsTab')}
+          subtitle="Upcoming and past bookings"
+          onPress={() => navigation.navigate('Bookings')}
+        />
+        <ListItem
+          icon={icon(Pill)}
+          title="Pharmacy & requests"
+          subtitle="Pharmacy orders and nurse requests"
+          onPress={() => navigation.navigate('HealthRequests')}
         />
         <ListItem
           icon={icon(ReceiptText)}
@@ -65,14 +79,14 @@ export const ProfileScreen: React.FC = () => {
         <ListItem
           icon={icon(ShieldCheck)}
           title="Campus security"
-          subtitle={`24/7 · ${CAMPUS.securityPhone}`}
-          onPress={() => Linking.openURL(`tel:${CAMPUS.securityPhone.replace(/\s/g, '')}`)}
+          subtitle={`24/7 · ${campus.securityPhone}`}
+          onPress={() => Linking.openURL(`tel:${campus.securityPhone.replace(/\s/g, '')}`)}
         />
         <ListItem
           icon={icon(Phone)}
           title="Medical centre"
-          subtitle={CAMPUS.medicalCenterPhone}
-          onPress={() => Linking.openURL(`tel:${CAMPUS.medicalCenterPhone.replace(/\s/g, '')}`)}
+          subtitle={campus.medicalCenterPhone}
+          onPress={() => Linking.openURL(`tel:${campus.medicalCenterPhone.replace(/\s/g, '')}`)}
           last
         />
       </ListGroup>

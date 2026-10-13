@@ -11,6 +11,10 @@ import { MedicalCenterInfoScreen } from '../screens/MedicalCenterInfoScreen';
 import { MenuDetailScreen } from '../screens/MenuDetailScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
+import { BookingsScreen } from '../screens/BookingsScreen';
+import { HealthRequestsScreen } from '../screens/HealthRequestsScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
+import '../store/campusStore';
 import { useAuthStore } from '../store/authStore';
 import { colors, fonts } from '../theme';
 
@@ -41,6 +45,9 @@ export const RootNavigator: React.FC = () => {
           <Stack.Screen name="MedicalCenterInfo" component={MedicalCenterInfoScreen} options={{ title: 'Medical centre' }} />
           <Stack.Screen name="MenuDetail" component={MenuDetailScreen} options={{ title: '' }} />
           <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Your order' }} />
+          <Stack.Screen name="Bookings" component={BookingsScreen} options={{ title: 'Room bookings' }} />
+          <Stack.Screen name="HealthRequests" component={HealthRequestsScreen} options={{ title: 'Pharmacy & requests' }} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
           <Stack.Screen name="Orders" component={OrdersScreen} options={{ title: 'Orders' }} />
           <Stack.Screen
             name="EmergencyModal"
