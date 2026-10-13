@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Check, ReceiptText } from 'lucide-react-native';
-import { Order, RootStackParamList } from '../types';
+import { MenuItem, Order, RootStackParamList } from '../types';
+import { useCartStore } from '../store/cartStore';
 import { cafeteriaService } from '../services/cafeteria.service';
 import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { AppText } from '../components/AppText';
@@ -45,11 +46,71 @@ const placedAt = (iso: string) => {
 export const OrdersScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<RootStackParamList, 'Orders'>>();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { add } = useCartStore();
+  const [latest, setLatest] = useState<Order[]>([]);
+  // Older pages are appended on demand; the newest page is refreshed on realtime events.
+  const [older, setOlder] = useState<Order[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [busyReorder, setBusyReorder] = useState<string | null>(null);
 
-  const loadOrders = useCallback(() => {
-    cafeteriaService.getMyOrders().then(setOrders).catch(() => undefined);
+  const orders = [...latest, ...older.filter(o => !latest.some(l => l.id === o.id))];
+
+  const pageRef = useRef(1);
+  pageRef.current = page;
+
+  const loadOrders = useCallback(async () => {
+    try {
+      const first = await cafeteriaService.getMyOrders(1);
+      setLatest(first.orders);
+      setTotalPages(first.totalPages);
+      // Keep any older pages the user has already opened in step with the server too.
+      if (pageRef.current > 1) {
+        const rest = await Promise.all(
+          Array.from({ length: pageRef.current - 1 }, (_, i) => cafeteriaService.getMyOrders(i + 2))
+        );
+        setOlder(rest.flatMap(r => r.orders));
+      }
+    } catch {
+      /* keep what's on screen */
+    }
   }, []);
+
+  const loadOlder = async () => {
+    try {
+      const r = await cafeteriaService.getMyOrders(page + 1);
+      setOlder(prev => [...prev, ...r.orders]);
+      setPage(page + 1);
+      setTotalPages(r.totalPages);
+    } catch (error) {
+      Alert.alert('Could not load older orders', getErrorMessage(error, 'Please try again.'));
+    }
+  };
+
+  const reorder = async (order: Order) => {
+    setBusyReorder(order.id);
+    try {
+      const lines = await cafeteriaService.getReorderLines(order.id);
+      const available = lines.filter(l => l.available);
+      const unavailable = lines.filter(l => !l.available);
+      available.forEach(l => add(l.menuItem, l.quantity));
+      if (available.length === 0) {
+        Alert.alert('Nothing to reorder', 'None of the dishes from this order are available right now.');
+        return;
+      }
+      if (unavailable.length > 0) {
+        Alert.alert('Some dishes were left out', `Not available right now: ${unavailable.map(l => l.menuItem.name).join(', ')}.`, [
+          { text: 'Continue', onPress: () => navigation.navigate('Cart') },
+        ]);
+        return;
+      }
+      navigation.navigate('Cart');
+    } catch (error) {
+      Alert.alert('Could not reorder', getErrorMessage(error, 'Please try again.'));
+    } finally {
+      setBusyReorder(null);
+    }
+  };
 
   useEffect(() => {
     loadOrders();
@@ -132,16 +193,33 @@ export const OrdersScreen: React.FC = () => {
           <SectionLabel>Past orders</SectionLabel>
           <View style={styles.list}>
             {past.map(order => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard
+                key={order.id}
+                order={order}
+                onReorder={reorder}
+                reordering={busyReorder === order.id}
+                onOpenDish={item => navigation.navigate('MenuDetail', { item })}
+              />
             ))}
           </View>
+          {page < totalPages && <Button title="Show older orders" variant="secondary" onPress={loadOlder} style={styles.older} />}
         </>
       )}
     </Screen>
   );
 };
 
-const OrderCard: React.FC<{ order: Order; onCancel?: (order: Order) => void; bare?: boolean }> = ({ order, onCancel, bare }) => {
+interface OrderCardProps {
+  order: Order;
+  onCancel?: (order: Order) => void;
+  onReorder?: (order: Order) => void;
+  reordering?: boolean;
+  /** Opens a dish from the order (collected orders link to its page so it can be rated). */
+  onOpenDish?: (item: MenuItem) => void;
+  bare?: boolean;
+}
+
+const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onReorder, reordering, onOpenDish, bare }) => {
   const step = FLOW.indexOf(order.status === 'ACCEPTED' ? 'PLACED' : order.status);
   const content = (
     <>
@@ -149,8 +227,13 @@ const OrderCard: React.FC<{ order: Order; onCancel?: (order: Order) => void; bar
         <View>
           <AppText variant="heading">{order.orderToken}</AppText>
           <AppText variant="caption" tone="ink3" style={styles.meta}>
-            {placedAt(order.createdAt)} · {order.orderType === 'PICKUP' ? 'Pick up' : 'Dine in'}
+            {placedAt(order.createdAt)} · {order.orderType === 'PICKUP' ? 'Pick up' : `Dine in${order.tableNumber ? ` · table ${order.tableNumber}` : ''}`}
           </AppText>
+          {isActive(order) && order.orderType === 'PICKUP' && order.pickupTime && (
+            <AppText variant="caption" tone="ink3" style={styles.meta}>
+              Pickup around {formatTime(new Date(order.pickupTime))}
+            </AppText>
+          )}
         </View>
         <StatusBadge label={statusLabel[order.status]} tone={statusTone[order.status]} />
       </View>
@@ -170,14 +253,21 @@ const OrderCard: React.FC<{ order: Order; onCancel?: (order: Order) => void; bar
 
       <View style={styles.items}>
         {order.orderItems?.map(line => (
-          <View key={line.id} style={styles.itemRow}>
+          <Pressable
+            key={line.id}
+            style={styles.itemRow}
+            disabled={!onOpenDish || order.status !== 'COLLECTED'}
+            onPress={() => onOpenDish?.(line.menuItem)}
+            accessibilityRole={order.status === 'COLLECTED' ? 'button' : undefined}
+            accessibilityHint={order.status === 'COLLECTED' ? 'Opens the dish so you can rate it' : undefined}
+          >
             <AppText variant="callout" tone="ink2" style={styles.flex}>
               {line.quantity}× {line.menuItem.name}
             </AppText>
             <AppText variant="callout" tone="ink3">
               {formatCurrency(line.unitPrice * line.quantity)}
             </AppText>
-          </View>
+          </Pressable>
         ))}
       </View>
 
@@ -193,6 +283,16 @@ const OrderCard: React.FC<{ order: Order; onCancel?: (order: Order) => void; bar
         </AppText>
         <AppText variant="bodyMedium">{formatCurrency(order.totalAmount)}</AppText>
       </View>
+
+      {order.status === 'COLLECTED' && onOpenDish && (
+        <AppText variant="caption" tone="ink3" style={styles.note}>
+          Tap a dish to rate it.
+        </AppText>
+      )}
+
+      {onReorder && (
+        <Button title="Order again" variant="secondary" onPress={() => onReorder(order)} isLoading={reordering} style={styles.cancel} />
+      )}
 
       {onCancel && order.status === 'PLACED' && (
         <Button title="Cancel order" variant="secondary" onPress={() => onCancel(order)} style={styles.cancel} />
@@ -234,6 +334,7 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', gap: spacing.md },
   note: { marginTop: spacing.sm },
   cancel: { marginTop: spacing.md },
+  older: { marginTop: spacing.lg },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

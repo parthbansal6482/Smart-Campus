@@ -4,7 +4,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ShoppingBag } from 'lucide-react-native';
 import { RootStackParamList } from '../types';
-import { useCartStore, cartTotal } from '../store/cartStore';
+import { isKitchenOpenAt, kitchenHoursLabel, useCampusStore } from '../store/campusStore';
+import { CampusSettings } from '../types';
+import { lineProblem, useCartStore, cartTotal } from '../store/cartStore';
 import { cafeteriaService } from '../services/cafeteria.service';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -15,34 +17,57 @@ import { EmptyState, Stepper, VegMark } from '../components/Bits';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency, formatTime, getErrorMessage } from '../lib/format';
 
-const pickupOptions = () => {
+const pickupOptions = (settings: CampusSettings) => {
   const now = new Date();
-  return [15, 30, 45, 60].map(minutes => {
-    const at = new Date(now.getTime() + minutes * 60000);
-    // Round to the next 5 minutes so times read naturally.
-    at.setMinutes(Math.ceil(at.getMinutes() / 5) * 5, 0, 0);
-    return { value: at.toISOString(), label: minutes === 15 ? `ASAP · ${formatTime(at)}` : formatTime(at) };
-  });
+  return [15, 30, 45, 60, 90, 120]
+    .map(minutes => {
+      const at = new Date(now.getTime() + minutes * 60000);
+      // Round to the next 5 minutes so times read naturally.
+      at.setMinutes(Math.ceil(at.getMinutes() / 5) * 5, 0, 0);
+      return { minutes, at };
+    })
+    // Only offer times the kitchen is actually open.
+    .filter(({ at }) => isKitchenOpenAt(settings, at))
+    .map(({ minutes, at }) => ({ value: at.toISOString(), label: minutes === 15 ? `ASAP · ${formatTime(at)}` : formatTime(at) }));
 };
 
 export const CartScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { lines, setQuantity, clear } = useCartStore();
 
-  const slots = useMemo(pickupOptions, []);
+  const campus = useCampusStore(state => state.settings);
+  const slots = useMemo(() => pickupOptions(campus), [campus]);
+  const kitchenOpen = isKitchenOpenAt(campus, new Date());
   const [orderType, setOrderType] = useState<'PICKUP' | 'DINE_IN'>('PICKUP');
-  const [pickupTime, setPickupTime] = useState(slots[0].value);
+  const [chosenSlot, setPickupTime] = useState('');
+  // If the chosen time is no longer offered (hours changed, time passed) fall back to the first open slot.
+  const pickupTime = slots.some(o => o.value === chosenSlot) ? chosenSlot : slots[0]?.value ?? '';
   const [note, setNote] = useState('');
+  const [table, setTable] = useState('');
   const [placing, setPlacing] = useState(false);
 
   const total = cartTotal(lines);
+  const blocked = lines.some(l => lineProblem(l) !== null);
 
   const handlePlace = async () => {
+    if (!kitchenOpen) {
+      Alert.alert('The kitchen is closed', `Orders open again during kitchen hours (${kitchenHoursLabel(campus)}).`);
+      return;
+    }
+    if (orderType === 'PICKUP' && !pickupTime) {
+      Alert.alert('No pickup times left', 'The kitchen closes soon — try dine in, or order again tomorrow.');
+      return;
+    }
+    if (orderType === 'DINE_IN' && !table.trim()) {
+      Alert.alert('Add your table number', 'Tell us where to bring your order, e.g. T4.');
+      return;
+    }
     setPlacing(true);
     try {
       const order = await cafeteriaService.placeOrder({
         orderType,
         pickupTime: orderType === 'PICKUP' ? pickupTime : undefined,
+        tableNumber: orderType === 'DINE_IN' ? table.trim() : undefined,
         note: note.trim() || undefined,
         items: lines.map(l => ({ menuItemId: l.item.id, quantity: l.quantity })),
       });
@@ -84,6 +109,11 @@ export const CartScreen: React.FC = () => {
                 <AppText variant="caption" tone="ink3" style={styles.linePrice}>
                   {formatCurrency(line.item.price * line.quantity)}
                 </AppText>
+                {lineProblem(line) && (
+                  <AppText variant="caption" tone="critical">
+                    {lineProblem(line)}
+                  </AppText>
+                )}
               </View>
               <Stepper compact value={line.quantity} onChange={q => setQuantity(line.item.id, q)} />
             </View>
@@ -103,10 +133,23 @@ export const CartScreen: React.FC = () => {
         {orderType === 'PICKUP' && (
           <>
             <SectionLabel>Pickup time</SectionLabel>
-            <Chips value={pickupTime} onChange={setPickupTime} options={slots} />
+            {slots.length > 0 ? (
+              <Chips value={pickupTime} onChange={setPickupTime} options={slots} />
+            ) : (
+              <AppText variant="callout" tone="critical">
+                {kitchenOpen ? 'The kitchen is closing — no pickup times left today.' : `The kitchen is closed (${kitchenHoursLabel(campus)}).`}
+              </AppText>
+            )}
             <AppText variant="caption" tone="ink3" style={styles.helper}>
               We’ll start cooking so it’s ready when you arrive. Collect from the counter with your order number.
             </AppText>
+          </>
+        )}
+
+        {orderType === 'DINE_IN' && (
+          <>
+            <SectionLabel>Table number</SectionLabel>
+            <Field value={table} onChangeText={setTable} placeholder="e.g. T4" autoCapitalize="characters" maxLength={10} />
           </>
         )}
 
@@ -122,7 +165,12 @@ export const CartScreen: React.FC = () => {
       </Screen>
 
       <StickyFooter>
-        <Button title={`Place order · ${formatCurrency(total)}`} onPress={handlePlace} isLoading={placing} />
+        <Button
+          title={blocked ? 'Update unavailable items' : `Place order · ${formatCurrency(total)}`}
+          onPress={handlePlace}
+          isLoading={placing}
+          disabled={blocked || !kitchenOpen}
+        />
       </StickyFooter>
     </KeyboardAvoidingView>
   );

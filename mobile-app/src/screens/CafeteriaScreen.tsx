@@ -2,21 +2,39 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ArrowRight, ReceiptText, Soup } from 'lucide-react-native';
-import { CAMPUS } from '../data/mock';
-import { cafeteriaService } from '../services/cafeteria.service';
+import { ArrowRight, ReceiptText, Search, Soup } from 'lucide-react-native';
+import { cafeteriaService, MenuSort } from '../services/cafeteria.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { MenuCategory, MenuItem, RootStackParamList } from '../types';
 import { useCartStore, cartCount, cartTotal } from '../store/cartStore';
 import { AppText } from '../components/AppText';
 import { Chips } from '../components/Chips';
+import { Field } from '../components/Field';
+import { isKitchenOpenAt, kitchenHoursLabel, useCampusStore } from '../store/campusStore';
 import { Screen } from '../components/Screen';
 import { EmptyState, Stepper, VegMark } from '../components/Bits';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency, humanize } from '../lib/format';
 
 type CategoryFilter = 'ALL' | MenuCategory;
+type DietFilter = 'none' | 'dairy' | 'nuts' | 'gluten';
 
-const CATEGORIES: CategoryFilter[] = ['ALL', 'BREAKFAST', 'LUNCH', 'SNACKS', 'BEVERAGES', 'DESSERTS'];
+const SORTS: { value: MenuSort; label: string }[] = [
+  { value: 'name', label: 'A–Z' },
+  { value: 'popular', label: 'Popular' },
+  { value: 'rating', label: 'Top rated' },
+  { value: 'price_asc', label: 'Price' },
+  { value: 'calories', label: 'Lightest' },
+];
+
+// "nuts" also covers the specific nuts staff tend to list (peanuts, walnuts, cashew…).
+const ALLERGEN_GROUPS: Record<Exclude<DietFilter, 'none'>, string[]> = {
+  dairy: ['dairy'],
+  nuts: ['nuts', 'peanuts', 'walnuts', 'cashew', 'almonds'],
+  gluten: ['gluten'],
+};
+
+const CATEGORIES: CategoryFilter[] = ['ALL', 'BREAKFAST', 'LUNCH', 'SNACKS', 'BEVERAGES', 'DESSERTS', 'SPECIAL'];
 
 export const CafeteriaScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -24,22 +42,42 @@ export const CafeteriaScreen: React.FC = () => {
   const [category, setCategory] = useState<CategoryFilter>('ALL');
   const [vegOnly, setVegOnly] = useState<'all' | 'veg'>('all');
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<MenuSort>('name');
+  const [diet, setDiet] = useState<DietFilter>('none');
+  const [loaded, setLoaded] = useState(false);
+  const campus = useCampusStore(state => state.settings);
+  const hours = kitchenHoursLabel(campus);
+  const kitchenOpen = isKitchenOpenAt(campus, new Date());
 
   const loadMenu = useCallback(async () => {
     try {
-      setMenu(await cafeteriaService.getMenu());
+      setMenu(
+        await cafeteriaService.getMenu({
+          search,
+          sort,
+          vegOnly: vegOnly === 'veg',
+          excludeAllergens: diet === 'none' ? undefined : ALLERGEN_GROUPS[diet],
+        })
+      );
     } catch {
       /* keep last known menu */
+    } finally {
+      setLoaded(true);
     }
-  }, []);
+  }, [search, sort, vegOnly, diet]);
 
+  // Debounced so typing in the search box doesn't fire a request per keystroke.
   useEffect(() => {
-    loadMenu();
-  }, [loadMenu]);
+    const handle = setTimeout(loadMenu, search ? 300 : 0);
+    return () => clearTimeout(handle);
+  }, [loadMenu, search]);
+
+  // Menu edits, sell-outs and new ratings arrive live — no pull-to-refresh needed.
+  useEffect(() => realtimeEvents.on(REALTIME_EVENTS.cafeteriaMenuChanged, loadMenu), [loadMenu]);
 
   const items = menu.filter(item => {
     if (category !== 'ALL' && item.category !== category) return false;
-    if (vegOnly === 'veg' && !item.isVeg) return false;
     return true;
   }).sort((a, b) => Number(b.isAvailable) - Number(a.isAvailable));
 
@@ -51,7 +89,7 @@ export const CafeteriaScreen: React.FC = () => {
       <Screen
         topInset
         title="Cafeteria"
-        subtitle={`Kitchen open ${CAMPUS.kitchenHours}`}
+        subtitle={hours ? `Kitchen ${kitchenOpen ? 'open' : 'closed'} · ${hours}` : 'Order ahead and skip the queue'}
         bottomSpace={count > 0 ? 180 : 120}
         headerRight={
           <Pressable
@@ -64,6 +102,16 @@ export const CafeteriaScreen: React.FC = () => {
           </Pressable>
         }
       >
+        <Field
+          placeholder="Search dishes"
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+          autoCorrect={false}
+          accessibilityLabel="Search the menu"
+          leading={<Search size={18} color={colors.ink3} />}
+        />
+
         <View style={styles.filters}>
           <Chips
             value={category}
@@ -79,10 +127,25 @@ export const CafeteriaScreen: React.FC = () => {
               { value: 'veg', label: 'Veg only' },
             ]}
           />
+          <Chips
+            value={diet}
+            onChange={setDiet}
+            options={[
+              { value: 'none', label: 'Any ingredients' },
+              { value: 'dairy', label: 'Dairy-free' },
+              { value: 'nuts', label: 'Nut-free' },
+              { value: 'gluten', label: 'Gluten-free' },
+            ]}
+          />
+          <Chips value={sort} onChange={setSort} options={SORTS} />
         </View>
 
         {items.length === 0 ? (
-          <EmptyState icon={Soup} title="Nothing here right now" description="Try another category." />
+          <EmptyState
+            icon={Soup}
+            title={loaded ? 'Nothing matches' : 'Loading the menu…'}
+            description={loaded ? 'Try another category, or clear the search and filters.' : 'One moment.'}
+          />
         ) : (
           <View style={styles.menu}>
             {items.map((item, index) => (
@@ -159,6 +222,11 @@ const MenuRow: React.FC<MenuRowProps> = ({ item, quantity, last, onOpen, onAdd, 
           </AppText>
         )}
       </AppText>
+      {item.isAvailable && item.stock != null && item.stock <= 5 && (
+        <AppText variant="caption" tone="warn" style={styles.allergens}>
+          {`Only ${item.stock} left`}
+        </AppText>
+      )}
       {!!item.allergens?.length && (
         <AppText variant="caption" tone="ink3" numberOfLines={1} style={styles.allergens}>
           {`Contains ${item.allergens.join(', ')}`}
