@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { Role } from '@prisma/client';
 import { verifyAccessToken, TokenPayload } from '../utils/jwt';
 import { UnauthorizedError, ForbiddenError } from '../utils/errors';
+import { getAccountState } from '../utils/accountState';
 
 // Extend Express Request to hold user info
 declare global {
@@ -12,18 +13,28 @@ declare global {
   }
 }
 
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
+/**
+ * Resolves a bearer token to the current account: the token identifies the user, but their role
+ * and active status come from the database, so promotions, demotions and deactivations take
+ * effect immediately.
+ */
+const resolveUser = async (authHeader: string | undefined): Promise<TokenPayload | null> => {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const payload = verifyAccessToken(authHeader.split(' ')[1]);
+  const state = await getAccountState(payload.userId);
+  if (!state?.isActive) return null;
+  return { ...payload, role: state.role };
+};
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+export const authenticate = async (req: Request, _res: Response, next: NextFunction) => {
+  if (!req.headers.authorization?.startsWith('Bearer ')) {
     return next(new UnauthorizedError('Authentication token missing or invalid'));
   }
 
-  const token = authHeader.split(' ')[1];
-
   try {
-    const payload = verifyAccessToken(token);
-    req.user = payload;
+    const user = await resolveUser(req.headers.authorization);
+    if (!user) return next(new UnauthorizedError('This account no longer has access'));
+    req.user = user;
     return next();
   } catch {
     return next(new UnauthorizedError('Invalid or expired authentication token'));
@@ -31,14 +42,12 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
 };
 
 /** Like `authenticate`, but lets the request through unauthenticated instead of rejecting it. */
-export const authenticateOptional = (req: Request, _res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith('Bearer ')) {
-    try {
-      req.user = verifyAccessToken(authHeader.split(' ')[1]);
-    } catch {
-      // Ignore invalid tokens on optional-auth routes — treat as anonymous.
-    }
+export const authenticateOptional = async (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    const user = await resolveUser(req.headers.authorization);
+    if (user) req.user = user;
+  } catch {
+    // Ignore invalid tokens on optional-auth routes — treat as anonymous.
   }
   return next();
 };

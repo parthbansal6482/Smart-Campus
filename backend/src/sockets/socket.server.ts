@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { verifyAccessToken, TokenPayload } from '../utils/jwt';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { getAccountState } from '../utils/accountState';
 import { registerClassroomHandlers } from './handlers/classroom.handler';
 import { registerEmergencyHandlers } from './handlers/emergency.handler';
 import { registerCafeteriaHandlers } from './handlers/cafeteria.handler';
@@ -33,7 +34,7 @@ export const initSocketServer = (httpServer: HttpServer, options?: Partial<Serve
   // can never join `emergency-responders` or `cafeteria-staff` just by
   // emitting the right event name, the way the previous implementation
   // allowed.
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token =
       (socket.handshake.auth?.token as string | undefined) ||
       (socket.handshake.headers.authorization?.toString().startsWith('Bearer ')
@@ -46,7 +47,10 @@ export const initSocketServer = (httpServer: HttpServer, options?: Partial<Serve
 
     try {
       const payload = verifyAccessToken(token);
-      (socket as AuthenticatedSocket).data.user = payload;
+      // Role comes from the database, not the token, so rooms always match the account's current role.
+      const state = await getAccountState(payload.userId);
+      if (!state?.isActive) return next(new Error('Account deactivated'));
+      (socket as AuthenticatedSocket).data.user = { ...payload, role: state.role };
       return next();
     } catch {
       return next(new Error('Invalid or expired token'));
@@ -63,6 +67,8 @@ export const initSocketServer = (httpServer: HttpServer, options?: Partial<Serve
     // for notifications/status updates — no client-declared join needed,
     // and no way to join someone else's.
     socket.join(`user-${userId}`);
+    // Lets the server address "every admin", "every faculty member" etc. for live-update hints.
+    socket.join(`role-${role}`);
 
     if (RESPONDER_ROLES.includes(role)) {
       socket.join('emergency-responders');
