@@ -127,6 +127,7 @@ model User {
   consultations       Consultation[]     @relation("ConsultationRequester")
   assignedConsultations Consultation[]   @relation("ConsultationAssignee")
   orders              Order[]
+  menuReviews         MenuReview[]
   notifications       Notification[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
@@ -411,6 +412,10 @@ model MenuItem {
   isVeg       Boolean      @default(true) @map("is_veg")
   spiceLevel  Int          @default(0) @map("spice_level")
   rating      Float        @default(4.5)
+  // Number of reviews behind `rating`; 0 means the rating is just the default.
+  reviewCount Int          @default(0) @map("review_count")
+  // Remaining portions today. null = not tracked; reaching 0 marks the item unavailable.
+  stock       Int?
   isAvailable Boolean      @default(true) @map("is_available")
   isArchived  Boolean      @default(false) @map("is_archived")
   imageUrl    String?      @map("image_url")
@@ -431,12 +436,30 @@ model MenuItem {
   allergens   String[]     @default([])
 
   orderItems  OrderItem[]
+  reviews     MenuReview[]
 
   @@index([category])
   @@index([isVeg])
   @@index([isAvailable])
   @@index([isArchived])
   @@map("menu_items")
+}
+
+model MenuReview {
+  id         String   @id @default(uuid())
+  menuItemId String   @map("menu_item_id")
+  userId     String   @map("user_id")
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, userId])
+  @@index([menuItemId, createdAt])
+  @@map("menu_reviews")
 }
 
 model Order {
@@ -495,4 +518,14 @@ model Offer {
   createdAt        DateTime  @default(now()) @map("created_at")
 
   @@map("offers")
+}
+
+/// Campus-wide preferences an admin/staff can change at runtime (one row per setting key).
+model CampusSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id")
+
+  @@map("campus_settings")
 }
