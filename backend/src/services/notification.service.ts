@@ -2,6 +2,7 @@ import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { prisma } from '../config/db';
 import { NotificationType } from '@prisma/client';
 import { logger } from '../utils/logger';
+import { publishChange } from '../sockets/liveSync';
 import { getSocketIO } from '../sockets/socket.server';
 
 const expo = new Expo();
@@ -34,6 +35,7 @@ export const notifyUser = async (input: SendNotificationInput): Promise<void> =>
 
     try {
       getSocketIO().to(`user-${input.userId}`).emit('notification:new', notification);
+      publishChange('notifications', { users: [input.userId] }, 'created', [notification.id]);
     } catch {
       // Socket server not initialized (e.g. in tests) — persisted notification is enough.
     }

@@ -9,6 +9,8 @@ import { generateOpaqueToken, hashToken } from '../../utils/secureTokens';
 import { sendEmail } from '../../services/email.service';
 import { recordAudit } from '../../utils/audit';
 
+import { ADMINS, publishChange } from '../../sockets/liveSync';
+
 const SALT_ROUNDS = 12;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -82,6 +84,7 @@ export class AuthService {
 
     const tokens = await this.issueTokenPair(user, meta);
     await recordAudit({ actorId: user.id, action: 'auth.register', targetType: 'User', targetId: user.id });
+    publishChange('users', { roles: ADMINS }, 'created', [user.id]);
 
     return { user, ...tokens };
   }

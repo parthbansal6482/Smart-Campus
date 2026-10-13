@@ -5,6 +5,9 @@ import { ConflictError, NotFoundError } from '../../utils/errors';
 import { getPagination, buildMeta } from '../../utils/pagination';
 import { recordAudit } from '../../utils/audit';
 
+import { ADMINS, disconnectUserSockets, publishChange } from '../../sockets/liveSync';
+import { invalidateAccountState } from '../../utils/accountState';
+
 const SALT_ROUNDS = 12;
 
 const publicUserSelect = {
@@ -80,6 +83,7 @@ export class UsersService {
     });
 
     await recordAudit({ actorId, action: 'user.create', targetType: 'User', targetId: user.id, metadata: { role: data.role } });
+    publishChange('users', { roles: ADMINS }, 'created', [user.id]);
     return user;
   }
 
@@ -113,6 +117,11 @@ export class UsersService {
       targetId: id,
       metadata: { from: user.role, to: role },
     });
+    // The person themself (every device) also needs to learn their role changed.
+    publishChange('users', { roles: ADMINS, users: [id] }, 'updated', [id]);
+    // Their next request uses the new role, and their live connections rejoin the right rooms.
+    invalidateAccountState(id);
+    disconnectUserSockets(id);
 
     return updated;
   }
@@ -134,11 +143,17 @@ export class UsersService {
 
     const updated = await prisma.user.update({ where: { id }, data: { isActive }, select: publicUserSelect });
     await recordAudit({ actorId, action: isActive ? 'user.activate' : 'user.deactivate', targetType: 'User', targetId: id });
+    publishChange('users', { roles: ADMINS, users: [id] }, 'updated', [id]);
+    invalidateAccountState(id);
+    if (!isActive) disconnectUserSockets(id);
     return updated;
   }
 
   async updateProfile(id: string, data: { name?: string; phone?: string }) {
-    return prisma.user.update({ where: { id }, data, select: publicUserSelect });
+    const updated = await prisma.user.update({ where: { id }, data, select: publicUserSelect });
+    // Their other devices and the admin people list should show the new name/phone.
+    publishChange('users', { roles: ADMINS, users: [id] }, 'updated', [id]);
+    return updated;
   }
 
   async updatePushToken(id: string, expoPushToken: string | null) {
