@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChefHat, Plus, Soup } from 'lucide-react';
-import { cafeteriaService, MenuItemInput } from '../services/cafeteria.service';
+import { ChefHat, Plus, Search, Soup, Star } from 'lucide-react';
+import { cafeteriaService, MenuItemInput, OrderSearch } from '../services/cafeteria.service';
 import { REALTIME_EVENTS } from '../services/socket';
-import { MenuCategory, MenuItem, Order, OrderStatus } from '../types';
+import { CafeteriaStats, CampusSettings, MenuCategory, MenuItem, MenuReview, Order, OrderStatus } from '../types';
+import { settingsService } from '../services/settings.service';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -35,6 +36,7 @@ interface MenuForm {
   spiceLevel: string;
   // First photo is the cover; the rest form the gallery.
   photos: string[];
+  stock: string;
   servingSize: string;
   calories: string;
   proteinG: string;
@@ -55,6 +57,7 @@ const emptyForm: MenuForm = {
   isVeg: true,
   spiceLevel: '0',
   photos: [],
+  stock: '',
   servingSize: '',
   calories: '',
   proteinG: '',
@@ -94,6 +97,7 @@ const formFromItem = (item: MenuItem): MenuForm => ({
   isVeg: item.isVeg,
   spiceLevel: String(item.spiceLevel),
   photos: [...(item.imageUrl ? [item.imageUrl] : []), ...(item.galleryUrls ?? [])],
+  stock: item.stock != null ? String(item.stock) : '',
   servingSize: item.servingSize ?? '',
   calories: item.calories != null ? String(item.calories) : '',
   proteinG: item.proteinG != null ? String(item.proteinG) : '',
@@ -129,34 +133,145 @@ export const CafeteriaPage: React.FC = () => {
   const [form, setForm] = useState<MenuForm | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [stats, setStats] = useState<CafeteriaStats | null>(null);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<MenuItem | null>(null);
+  const [reviewsFor, setReviewsFor] = useState<MenuItem | null>(null);
+  const [reviews, setReviews] = useState<MenuReview[] | null>(null);
+  const [settings, setSettings] = useState<CampusSettings | null>(null);
+  const [menuSearch, setMenuSearch] = useState('');
+  const [menuSort, setMenuSort] = useState<'name' | 'price' | 'rating' | 'stock'>('name');
+
+  // History is queried on the server (search, status, dates, paging) rather than filtered from the live list.
+  const [historyStatus, setHistoryStatus] = useState<'ALL' | 'COLLECTED' | 'CANCELLED'>('ALL');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
+  const [history, setHistory] = useState<{ orders: Order[]; total: number; totalPages: number } | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    try {
+      setStats(await cafeteriaService.getStats());
+    } catch {
+      /* the board works without the summary */
+    }
+  }, []);
+
+  const loadMenu = useCallback(async () => {
+    try {
+      setMenu(await cafeteriaService.getMenu({ includeArchived: showRemoved }));
+    } catch {
+      /* keep last known menu */
+    }
+  }, [showRemoved]);
+
+  const loadSettings = useCallback(() => {
+    settingsService
+      .get()
+      .then(setSettings)
+      .catch(() => undefined);
+  }, []);
+
+  const loadReviews = useCallback(async (item: MenuItem) => {
+    try {
+      setReviews(await cafeteriaService.getReviews(item.id));
+    } catch {
+      /* keep what is shown */
+    }
+  }, []);
+
+  // Bumped on menu changes so an open reviews dialog refetches.
+  const [reviewsVersion, setReviewsVersion] = useState(0);
+  useEffect(() => {
+    if (reviewsFor) loadReviews(reviewsFor);
+    else setReviews(null);
+  }, [reviewsFor, reviewsVersion, loadReviews]);
+
+  // Bumped whenever orders change so the History tab refetches its current query.
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   const loadOrders = useCallback(async () => {
     try {
       setOrders(await cafeteriaService.getOrders(true));
+      loadStats();
     } catch {
       /* keep last known board */
     }
-  }, []);
+  }, [loadStats]);
 
   useEffect(() => {
     (async () => {
-      const [ordersRes, menuRes] = await Promise.allSettled([cafeteriaService.getOrders(true), cafeteriaService.getMenu()]);
+      const [ordersRes, menuRes] = await Promise.allSettled([cafeteriaService.getOrders(true), cafeteriaService.getMenu({ includeArchived: showRemoved })]);
+      loadSettings();
+      loadStats();
       if (ordersRes.status === 'fulfilled') setOrders(ordersRes.value);
       if (menuRes.status === 'fulfilled') setMenu(menuRes.value);
       setLoading(false);
     })();
-    const interval = setInterval(loadOrders, 20000);
-    window.addEventListener(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener(REALTIME_EVENTS.cafeteriaOrdersChanged, loadOrders);
+    // Polling is only a safety net for a missed socket event.
+    const interval = setInterval(() => {
+      loadOrders();
+      loadMenu();
+    }, 20000);
+    const onOrders = () => {
+      loadOrders();
+      setHistoryVersion(v => v + 1);
     };
-  }, [loadOrders]);
+    const onMenu = () => {
+      loadMenu();
+      loadStats();
+      setReviewsVersion(v => v + 1);
+    };
+    window.addEventListener(REALTIME_EVENTS.cafeteriaOrdersChanged, onOrders);
+    window.addEventListener(REALTIME_EVENTS.cafeteriaMenuChanged, onMenu);
+    window.addEventListener(REALTIME_EVENTS.settingsChanged, loadSettings);
+    return () => {
+      window.removeEventListener(REALTIME_EVENTS.settingsChanged, loadSettings);
+      clearInterval(interval);
+      window.removeEventListener(REALTIME_EVENTS.cafeteriaOrdersChanged, onOrders);
+      window.removeEventListener(REALTIME_EVENTS.cafeteriaMenuChanged, onMenu);
+    };
+  }, [loadOrders, loadMenu, loadStats, loadSettings]);
+
+  // Debounce typing in the history search so each keystroke doesn't hit the API.
+  useEffect(() => {
+    if (section !== 'history') return;
+    const handle = setTimeout(async () => {
+      const query: OrderSearch = {
+        status: historyStatus === 'ALL' ? undefined : historyStatus,
+        search: historySearch.trim() || undefined,
+        from: historyFrom ? new Date(`${historyFrom}T00:00:00`).toISOString() : undefined,
+        to: historyTo ? new Date(`${historyTo}T23:59:59.999`).toISOString() : undefined,
+        page: historyPage,
+      };
+      setHistoryLoading(true);
+      try {
+        setHistory(await cafeteriaService.searchOrders(query));
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Couldn’t load order history.'));
+      } finally {
+        setHistoryLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [section, historyStatus, historySearch, historyFrom, historyTo, historyPage, historyVersion]);
 
   const liveOrders = orders.filter(o => ['PLACED', 'ACCEPTED', 'PREPARING', 'READY'].includes(o.status));
-  const pastOrders = orders.filter(o => o.status === 'COLLECTED' || o.status === 'CANCELLED');
-  const visibleMenu = menu.filter(m => categoryFilter === 'ALL' || m.category === categoryFilter);
-  const unavailableCount = menu.filter(m => !m.isAvailable).length;
+  const needle = menuSearch.trim().toLowerCase();
+  const visibleMenu = menu
+    .filter(m => (categoryFilter === 'ALL' || m.category === categoryFilter) && (!needle || m.name.toLowerCase().includes(needle)))
+    .sort((a, b) =>
+      menuSort === 'price'
+        ? a.price - b.price
+        : menuSort === 'rating'
+          ? b.rating - a.rating
+          : menuSort === 'stock'
+            ? (a.stock ?? Infinity) - (b.stock ?? Infinity)
+            : a.name.localeCompare(b.name)
+    );
+  const unavailableCount = menu.filter(m => !m.isAvailable && !m.isArchived).length;
 
   const advanceOrder = async (order: Order, status: OrderStatus) => {
     setBusyId(order.id);
@@ -181,6 +296,44 @@ export const CafeteriaPage: React.FC = () => {
     } catch (err) {
       setMenu(prev => prev.map(m => (m.id === item.id ? { ...m, isAvailable: !isAvailable } : m)));
       toast.error(getErrorMessage(err, `Couldn’t update ${item.name}.`));
+    }
+  };
+
+  const removeItem = async (item: MenuItem) => {
+    setBusyId(item.id);
+    try {
+      await cafeteriaService.deleteMenuItem(item.id);
+      setMenu(prev => (showRemoved ? prev.map(m => (m.id === item.id ? { ...m, isArchived: true, isAvailable: false } : m)) : prev.filter(m => m.id !== item.id)));
+      toast.success(`${item.name} removed from the menu`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Couldn’t remove ${item.name}.`));
+    } finally {
+      setBusyId(null);
+      setRemoveTarget(null);
+    }
+  };
+
+  const restoreItem = async (item: MenuItem) => {
+    setBusyId(item.id);
+    try {
+      const restored = await cafeteriaService.restoreMenuItem(item.id);
+      setMenu(prev => prev.map(m => (m.id === item.id ? restored : m)));
+      toast.success(`${item.name} is back on the menu`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Couldn’t restore ${item.name}.`));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const deleteReview = async (review: MenuReview) => {
+    if (!reviewsFor) return;
+    try {
+      await cafeteriaService.deleteReview(reviewsFor.id, review.id);
+      setReviews(prev => prev?.filter(r => r.id !== review.id) ?? null);
+      toast.success('Review removed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Couldn’t remove the review.'));
     }
   };
 
@@ -214,6 +367,7 @@ export const CafeteriaPage: React.FC = () => {
       spiceLevel: parseInt(form.spiceLevel, 10),
       imageUrl: form.photos[0],
       galleryUrls: form.photos.slice(1),
+      stock: toNumber(form.stock) ?? blank,
       servingSize: form.servingSize.trim() || blank,
       calories: toNumber(form.calories) ?? blank,
       proteinG: toNumber(form.proteinG) ?? blank,
@@ -268,6 +422,39 @@ export const CafeteriaPage: React.FC = () => {
           { value: 'menu', label: 'Menu', count: menu.length },
         ]}
       />
+
+      {section === 'live' && settings && settings.cafeteriaOpensAt && settings.cafeteriaClosesAt && (
+        <p className="text-[13px] text-ink-3 mb-3">
+          Kitchen hours {settings.cafeteriaOpensAt}–{settings.cafeteriaClosesAt}. Orders outside these hours are refused; change them in Settings.
+        </p>
+      )}
+
+      {section === 'live' && stats && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+          {[
+            { label: 'Orders today', value: String(stats.today.orders) },
+            { label: 'Revenue today', value: formatCurrency(stats.today.revenue) },
+            {
+              label: 'Avg. time to collect',
+              value: stats.today.avgFulfilmentMinutes != null ? `${stats.today.avgFulfilmentMinutes} min` : '—',
+            },
+            {
+              label: 'Top seller (7 days)',
+              value: stats.topItems[0] ? `${stats.topItems[0].name} · ${stats.topItems[0].quantity}` : '—',
+            },
+          ].map(tile => (
+            <Card key={tile.label} className="p-4">
+              <p className="text-[13px] text-ink-3">{tile.label}</p>
+              <p className="mt-1 font-serif text-[24px] leading-tight text-ink tabular truncate">{tile.value}</p>
+            </Card>
+          ))}
+          {stats.lowStock.length > 0 && (
+            <p className="sm:col-span-2 lg:col-span-4 text-[13px] text-ink-3">
+              Running low: {stats.lowStock.map(i => `${i.name} (${i.stock})`).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
 
       {section === 'live' && (
         <div className="grid gap-4 lg:grid-cols-3 items-start">
@@ -353,43 +540,110 @@ export const CafeteriaPage: React.FC = () => {
 
       {section === 'history' && (
         <Card>
-          {loading ? (
+          <div className="grid gap-3 p-4 border-b border-line sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative">
+              <Search className="w-4 h-4 text-ink-3 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
+              <Input
+                aria-label="Search orders"
+                className="pl-9"
+                placeholder="Order # or customer"
+                value={historySearch}
+                onChange={e => {
+                  setHistorySearch(e.target.value);
+                  setHistoryPage(1);
+                }}
+              />
+            </div>
+            <Select
+              aria-label="Status"
+              value={historyStatus}
+              onChange={e => {
+                setHistoryStatus(e.target.value as typeof historyStatus);
+                setHistoryPage(1);
+              }}
+            >
+              <option value="ALL">All finished orders</option>
+              <option value="COLLECTED">Collected</option>
+              <option value="CANCELLED">Cancelled</option>
+            </Select>
+            <Input
+              type="date"
+              aria-label="From date"
+              value={historyFrom}
+              max={historyTo || undefined}
+              onChange={e => {
+                setHistoryFrom(e.target.value);
+                setHistoryPage(1);
+              }}
+            />
+            <Input
+              type="date"
+              aria-label="To date"
+              value={historyTo}
+              min={historyFrom || undefined}
+              onChange={e => {
+                setHistoryTo(e.target.value);
+                setHistoryPage(1);
+              }}
+            />
+          </div>
+          {history === null || (historyLoading && history.orders.length === 0) ? (
             <div className="pt-5">
               <SkeletonRows />
             </div>
-          ) : pastOrders.length === 0 ? (
-            <EmptyState icon={ChefHat} title="No completed orders yet" description="Collected and cancelled orders are kept here." />
+          ) : history.orders.length === 0 ? (
+            <EmptyState icon={ChefHat} title="No orders found" description="Try a different search, status or date range." />
           ) : (
-            <Table>
-              <THead className="border-t-0">
-                <tr>
-                  <TH>Order</TH>
-                  <TH>Customer</TH>
-                  <TH>Items</TH>
-                  <TH>Placed</TH>
-                  <TH>Status</TH>
-                  <TH className="text-right">Total</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {pastOrders.map(order => (
-                  <TR key={order.id}>
-                    <TD className="font-mono text-ink">{order.orderToken}</TD>
-                    <TD className="text-ink">{order.user?.name}</TD>
-                    <TD className="max-w-[280px] truncate">
-                      {order.orderItems?.map(i => `${i.quantity}× ${i.menuItem?.name}`).join(', ')}
-                    </TD>
-                    <TD className="whitespace-nowrap">
-                      {formatDate(order.createdAt)}, {formatTime(order.createdAt)}
-                    </TD>
-                    <TD>
-                      <Badge tone={orderTone(order.status)}>{orderLabel[order.status]}</Badge>
-                    </TD>
-                    <TD className="text-right text-ink tabular">{formatCurrency(order.totalAmount)}</TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
+            <>
+              <Table>
+                <THead className="border-t-0">
+                  <tr>
+                    <TH>Order</TH>
+                    <TH>Customer</TH>
+                    <TH>Items</TH>
+                    <TH>Placed</TH>
+                    <TH>Status</TH>
+                    <TH className="text-right">Total</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {history.orders.map(order => (
+                    <TR key={order.id}>
+                      <TD className="font-mono text-ink">{order.orderToken}</TD>
+                      <TD className="text-ink">{order.user?.name}</TD>
+                      <TD className="max-w-[280px] truncate">
+                        {order.orderItems?.map(i => `${i.quantity}× ${i.menuItem?.name}`).join(', ')}
+                      </TD>
+                      <TD className="whitespace-nowrap">
+                        {formatDate(order.createdAt)}, {formatTime(order.createdAt)}
+                      </TD>
+                      <TD>
+                        <Badge tone={orderTone(order.status)}>{orderLabel[order.status]}</Badge>
+                      </TD>
+                      <TD className="text-right text-ink tabular">{formatCurrency(order.totalAmount)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-line text-[13px] text-ink-3">
+                <span className="tabular">
+                  {history.total} order{history.total === 1 ? '' : 's'} · page {historyPage} of {history.totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" disabled={historyPage <= 1 || historyLoading} onClick={() => setHistoryPage(p => p - 1)}>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={historyPage >= history.totalPages || historyLoading}
+                    onClick={() => setHistoryPage(p => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </Card>
       )}
@@ -406,7 +660,20 @@ export const CafeteriaPage: React.FC = () => {
               ]}
               className="overflow-x-auto max-w-full"
             />
-            {unavailableCount > 0 && <p className="text-[13px] text-ink-3">{unavailableCount} sold out</p>}
+            <div className="flex items-center gap-2">
+              {unavailableCount > 0 && <p className="text-[13px] text-ink-3 whitespace-nowrap">{unavailableCount} sold out</p>}
+              <label className="flex items-center gap-2 text-[13px] text-ink-3 whitespace-nowrap">
+                <Switch label="Show removed dishes" checked={showRemoved} onChange={setShowRemoved} />
+                Removed
+              </label>
+              <Input aria-label="Search menu" placeholder="Search dishes" value={menuSearch} onChange={e => setMenuSearch(e.target.value)} />
+              <Select aria-label="Sort menu" value={menuSort} onChange={e => setMenuSort(e.target.value as typeof menuSort)}>
+                <option value="name">Name</option>
+                <option value="price">Price</option>
+                <option value="rating">Rating</option>
+                <option value="stock">Lowest stock</option>
+              </Select>
+            </div>
           </div>
           {loading ? (
             <div className="pt-5">
@@ -430,6 +697,8 @@ export const CafeteriaPage: React.FC = () => {
                   <TH>Item</TH>
                   <TH>Category</TH>
                   <TH className="text-right">Price</TH>
+                  <TH>Rating</TH>
+                  <TH>Stock</TH>
                   <TH>Available</TH>
                   <TH className="text-right">
                     <span className="sr-only">Actions</span>
@@ -438,7 +707,7 @@ export const CafeteriaPage: React.FC = () => {
               </THead>
               <TBody>
                 {visibleMenu.map(item => (
-                  <TR key={item.id} className={cn(!item.isAvailable && 'text-ink-4')}>
+                  <TR key={item.id} className={cn((!item.isAvailable || item.isArchived) && 'text-ink-4')}>
                     <TD>
                       <div className="flex items-center gap-2.5">
                         {item.imageUrl ? (
@@ -456,24 +725,48 @@ export const CafeteriaPage: React.FC = () => {
                     </TD>
                     <TD>{humanize(item.category)}</TD>
                     <TD className="text-right tabular text-ink">{formatCurrency(item.price)}</TD>
-                    <TD>
-                      <div className="flex items-center gap-2.5">
-                        <Switch
-                          label={`${item.name} available`}
-                          checked={item.isAvailable}
-                          onChange={value => toggleAvailability(item, value)}
-                        />
-                        <span className="text-xs text-ink-3">{item.isAvailable ? 'On menu' : 'Sold out'}</span>
-                      </div>
+                    <TD className="whitespace-nowrap tabular">
+                      <span className="inline-flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 text-ink-3" aria-hidden />
+                        {item.rating.toFixed(1)}
+                        {!!item.reviewCount && <span className="text-ink-3">({item.reviewCount})</span>}
+                      </span>
                     </TD>
-                    <TD className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setForm(formFromItem(item))}
-                      >
-                        Edit
-                      </Button>
+                    <TD className={cn('tabular', item.stock != null && item.stock <= 5 && 'text-critical')}>
+                      {item.stock != null ? item.stock : '—'}
+                    </TD>
+                    <TD>
+                      {item.isArchived ? (
+                        <span className="text-xs text-ink-3">Removed</span>
+                      ) : (
+                        <div className="flex items-center gap-2.5">
+                          <Switch
+                            label={`${item.name} available`}
+                            checked={item.isAvailable}
+                            onChange={value => toggleAvailability(item, value)}
+                          />
+                          <span className="text-xs text-ink-3">{item.isAvailable ? 'On menu' : 'Sold out'}</span>
+                        </div>
+                      )}
+                    </TD>
+                    <TD className="text-right whitespace-nowrap">
+                      {item.isArchived ? (
+                        <Button size="sm" variant="secondary" isLoading={busyId === item.id} onClick={() => restoreItem(item)}>
+                          Restore
+                        </Button>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => setReviewsFor(item)} disabled={!item.reviewCount}>
+                            Reviews
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setForm(formFromItem(item))}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setRemoveTarget(item)}>
+                            Remove
+                          </Button>
+                        </>
+                      )}
                     </TD>
                   </TR>
                 ))}
@@ -566,6 +859,16 @@ export const CafeteriaPage: React.FC = () => {
               </div>
             </fieldset>
 
+            <Input
+              label="Portions available today"
+              type="number"
+              min="0"
+              step="1"
+              value={form.stock}
+              onChange={e => setForm({ ...form, stock: e.target.value })}
+              hint="Leave blank to not track stock. At 0 the dish shows as sold out."
+            />
+
             <fieldset className="space-y-3">
               <legend className="text-[13px] font-medium text-ink">Nutrition (per serving)</legend>
               <Input
@@ -610,6 +913,51 @@ export const CafeteriaPage: React.FC = () => {
               </Button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!removeTarget}
+        title="Remove from the menu?"
+        description={
+          removeTarget
+            ? `${removeTarget.name} disappears from the app straight away. Past orders keep it, and you can restore it later from “Removed”.`
+            : ''
+        }
+        confirmLabel="Remove dish"
+        destructive
+        isLoading={busyId === removeTarget?.id}
+        onConfirm={() => removeTarget && removeItem(removeTarget)}
+        onCancel={() => setRemoveTarget(null)}
+      />
+
+      <Modal
+        isOpen={!!reviewsFor}
+        onClose={() => setReviewsFor(null)}
+        title={reviewsFor ? `Reviews · ${reviewsFor.name}` : 'Reviews'}
+        description="Remove anything abusive or off-topic. The rating updates straight away."
+      >
+        {reviews === null ? (
+          <SkeletonRows />
+        ) : reviews.length === 0 ? (
+          <p className="text-[13px] text-ink-3 py-6 text-center">No reviews left.</p>
+        ) : (
+          <ul className="divide-y divide-line -my-2">
+            {reviews.map(review => (
+              <li key={review.id} className="py-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] text-ink">
+                    {review.user.name} · <span className="tabular">{review.rating}★</span>
+                    <span className="text-ink-4"> · {timeAgo(review.createdAt)}</span>
+                  </p>
+                  {review.comment && <p className="text-[13px] text-ink-2 mt-0.5 break-words">{review.comment}</p>}
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => deleteReview(review)}>
+                  Delete
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
       </Modal>
 
