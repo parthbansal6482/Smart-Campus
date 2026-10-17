@@ -91,6 +91,7 @@ export class CafeteriaController {
       const { orders, total } = await cafeteriaService.getOrders({
         userId,
         status: query.status,
+        activeOnly: query.active,
         search: query.search,
         from: query.from,
         to: query.to,

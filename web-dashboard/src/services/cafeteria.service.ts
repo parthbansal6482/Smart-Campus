@@ -15,6 +15,8 @@ export interface OrderSearch {
   from?: string;
   to?: string;
   page?: number;
+  /** false = finished orders only (collected or cancelled). */
+  active?: boolean;
 }
 
 export const cafeteriaService = {
@@ -62,9 +64,9 @@ export const cafeteriaService = {
     return res.data.data.url;
   },
 
-  // The live board needs every open order, not just the first page.
+  // The live board needs every open order (however old), and none of the finished ones.
   getOrders: async (all = true, status?: OrderStatus): Promise<Order[]> => {
-    const res = await api.get<ApiResponse<Order[]>>('/cafeteria/orders', { params: { all, status, limit: 100 } });
+    const res = await api.get<ApiResponse<Order[]>>('/cafeteria/orders', { params: { all, status, active: status ? undefined : true, limit: 100 } });
     return res.data.data;
   },
 

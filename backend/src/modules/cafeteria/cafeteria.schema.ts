@@ -142,6 +142,8 @@ export const orderListQuerySchema = z
   .object({
     status: z.nativeEnum(OrderStatus).optional(),
     all: queryBool,
+    // true = only orders still in the kitchen pipeline, false = only finished ones (collected/cancelled); overrides `status`.
+    active: queryBool,
     // Token (#ORD-0007 or just 7) or, for staff, the customer's name.
     search: z.string().trim().max(60).optional(),
     from: z.string().datetime().optional(),
