@@ -17,6 +17,12 @@ interface CartState {
   clear: () => void;
 }
 
+/** The API rejects more than this many of one dish in a single order. */
+export const MAX_LINE_QUANTITY = 20;
+
+/** The most of a dish that can go in the cart: the per-line cap, or the portions left if tracked. */
+export const maxQuantityFor = (item: MenuItem) => Math.min(MAX_LINE_QUANTITY, item.stock != null ? Math.max(item.stock, 1) : MAX_LINE_QUANTITY);
+
 /** Local-only cart state — the order itself is placed against the real API
  *  (see cafeteria.service.ts) once the student confirms it. */
 export const useCartStore = create<CartState>(set => ({
@@ -27,10 +33,10 @@ export const useCartStore = create<CartState>(set => ({
       const existing = state.lines.find(l => l.item.id === item.id);
       if (existing) {
         return {
-          lines: state.lines.map(l => (l.item.id === item.id ? { ...l, quantity: l.quantity + quantity } : l)),
+          lines: state.lines.map(l => (l.item.id === item.id ? { ...l, quantity: Math.min(l.quantity + quantity, maxQuantityFor(l.item)) } : l)),
         };
       }
-      return { lines: [...state.lines, { item, quantity }] };
+      return { lines: [...state.lines, { item, quantity: Math.min(quantity, maxQuantityFor(item)) }] };
     }),
 
   setQuantity: (itemId, quantity) =>
@@ -38,7 +44,7 @@ export const useCartStore = create<CartState>(set => ({
       lines:
         quantity <= 0
           ? state.lines.filter(l => l.item.id !== itemId)
-          : state.lines.map(l => (l.item.id === itemId ? { ...l, quantity } : l)),
+          : state.lines.map(l => (l.item.id === itemId ? { ...l, quantity: Math.min(quantity, MAX_LINE_QUANTITY) } : l)),
     })),
 
   syncItems: fresh =>

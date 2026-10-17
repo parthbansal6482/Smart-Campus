@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -6,7 +6,7 @@ import { ShoppingBag } from 'lucide-react-native';
 import { RootStackParamList } from '../types';
 import { isKitchenOpenAt, kitchenHoursLabel, useCampusStore } from '../store/campusStore';
 import { CampusSettings } from '../types';
-import { lineProblem, useCartStore, cartTotal } from '../store/cartStore';
+import { lineProblem, maxQuantityFor, useCartStore, cartTotal } from '../store/cartStore';
 import { cafeteriaService } from '../services/cafeteria.service';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -28,7 +28,8 @@ const pickupOptions = (settings: CampusSettings) => {
     })
     // Only offer times the kitchen is actually open.
     .filter(({ at }) => isKitchenOpenAt(settings, at))
-    .map(({ minutes, at }) => ({ value: at.toISOString(), label: minutes === 15 ? `ASAP · ${formatTime(at)}` : formatTime(at) }));
+    // The choice is kept as "minutes from now" so it survives the clock ticking; the exact time is computed when ordering.
+    .map(({ minutes, at }) => ({ value: String(minutes), at, label: minutes === 15 ? `ASAP · ${formatTime(at)}` : formatTime(at) }));
 };
 
 export const CartScreen: React.FC = () => {
@@ -36,8 +37,16 @@ export const CartScreen: React.FC = () => {
   const { lines, setQuantity, clear } = useCartStore();
 
   const campus = useCampusStore(state => state.settings);
-  const slots = useMemo(() => pickupOptions(campus), [campus]);
-  const kitchenOpen = isKitchenOpenAt(campus, new Date());
+  // Re-evaluate every 30 s so slot times and the open/closed state don't go stale on a screen left open.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const slots = useMemo(() => pickupOptions(campus), [campus, tick]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const kitchenOpen = useMemo(() => isKitchenOpenAt(campus, new Date()), [campus, tick]);
   const [orderType, setOrderType] = useState<'PICKUP' | 'DINE_IN'>('PICKUP');
   const [chosenSlot, setPickupTime] = useState('');
   // If the chosen time is no longer offered (hours changed, time passed) fall back to the first open slot.
@@ -62,11 +71,18 @@ export const CartScreen: React.FC = () => {
       Alert.alert('Add your table number', 'Tell us where to bring your order, e.g. T4.');
       return;
     }
+    // Work out the exact pickup time now, from the freshest clock reading.
+    const slot = orderType === 'PICKUP' ? pickupOptions(campus).find(o => o.value === pickupTime) : undefined;
+    if (orderType === 'PICKUP' && !slot) {
+      Alert.alert('That pickup time has passed', 'Pick another time and try again.');
+      return;
+    }
+    if (placing) return;
     setPlacing(true);
     try {
       const order = await cafeteriaService.placeOrder({
         orderType,
-        pickupTime: orderType === 'PICKUP' ? pickupTime : undefined,
+        pickupTime: slot?.at.toISOString(),
         tableNumber: orderType === 'DINE_IN' ? table.trim() : undefined,
         note: note.trim() || undefined,
         items: lines.map(l => ({ menuItemId: l.item.id, quantity: l.quantity })),
@@ -115,7 +131,7 @@ export const CartScreen: React.FC = () => {
                   </AppText>
                 )}
               </View>
-              <Stepper compact value={line.quantity} onChange={q => setQuantity(line.item.id, q)} />
+              <Stepper compact max={maxQuantityFor(line.item)} value={line.quantity} onChange={q => setQuantity(line.item.id, q)} />
             </View>
           ))}
         </View>
