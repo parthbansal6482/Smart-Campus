@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -22,7 +23,9 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, descriptio
 
   if (!isOpen) return null;
 
-  return (
+  // Rendered on <body>: page wrappers use transforms (entrance animation), which would otherwise make
+  // `fixed` relative to the whole page instead of the screen and push the dialog out of view.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/30" onClick={onClose} aria-hidden />
       <div
@@ -30,11 +33,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, descriptio
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative w-full bg-surface rounded-2xl border border-line shadow-pop animate-enter',
+          // Capped to the screen height: the header and footer stay put while the body scrolls.
+          'relative flex flex-col w-full max-h-[calc(100dvh-2rem)] bg-surface rounded-2xl border border-line shadow-pop animate-enter',
           size === 'sm' ? 'max-w-sm' : 'max-w-lg'
         )}
       >
-        <div className="flex items-start justify-between gap-4 px-6 pt-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6">
           <div>
             <h2 className="font-serif text-[26px] leading-tight text-ink">{title}</h2>
             {description && <p className="text-[13px] text-ink-3 mt-1">{description}</p>}
@@ -47,10 +51,11 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, descriptio
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
-        {footer && <div className="flex justify-end gap-2 px-6 pb-6">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {footer && <div className="flex shrink-0 justify-end gap-2 px-6 pb-6">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

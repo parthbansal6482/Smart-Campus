@@ -17,7 +17,11 @@ interface TabsProps<T extends string> {
 /** Underlined section tabs — used for switching between page sections. */
 export function Tabs<T extends string>({ items, value, onChange, className }: TabsProps<T>) {
   return (
-    <div role="tablist" className={cn('flex items-center gap-6 border-b border-line', className)}>
+    // Scrolls sideways instead of overflowing the page when there are more tabs than fit (phones).
+    <div
+      role="tablist"
+      className={cn('flex items-center gap-6 border-b border-line overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)}
+    >
       {items.map(item => {
         const active = item.value === value;
         return (
@@ -27,7 +31,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: Ta
             aria-selected={active}
             onClick={() => onChange(item.value)}
             className={cn(
-              'relative -mb-px flex items-center gap-2 h-10 text-sm transition-colors border-b-2',
+              'relative -mb-px flex shrink-0 items-center gap-2 h-10 text-sm whitespace-nowrap transition-colors border-b-2',
               active ? 'text-ink font-medium border-ink' : 'text-ink-3 border-transparent hover:text-ink'
             )}
           >
