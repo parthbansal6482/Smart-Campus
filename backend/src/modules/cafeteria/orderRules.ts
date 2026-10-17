@@ -30,7 +30,10 @@ const toMinutes = (hhmm: string) => {
 export const isWithinOpeningHours = (when: Date, opensAt?: string, closesAt?: string): boolean => {
   if (!opensAt || !closesAt) return true;
   const minutes = when.getHours() * 60 + when.getMinutes();
-  return minutes >= toMinutes(opensAt) && minutes <= toMinutes(closesAt);
+  const open = toMinutes(opensAt);
+  const close = toMinutes(closesAt);
+  // Hours that run past midnight (e.g. 20:00–02:00) wrap around.
+  return open <= close ? minutes >= open && minutes <= close : minutes >= open || minutes <= close;
 };
 
 /** A pickup slot may be at most a minute in the past (clock skew) and no more than a day ahead. */

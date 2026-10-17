@@ -33,6 +33,12 @@ describe('canTransition', () => {
 describe('isWithinOpeningHours', () => {
   const at = (h: number, m = 0) => new Date(2026, 9, 12, h, m);
 
+  it('handles hours that run past midnight', () => {
+    expect(isWithinOpeningHours(at(23), '20:00', '02:00')).toBe(true);
+    expect(isWithinOpeningHours(at(1), '20:00', '02:00')).toBe(true);
+    expect(isWithinOpeningHours(at(12), '20:00', '02:00')).toBe(false);
+  });
+
   it('is always open when no hours are configured', () => {
     expect(isWithinOpeningHours(at(3))).toBe(true);
     expect(isWithinOpeningHours(at(3), '08:00')).toBe(true);
