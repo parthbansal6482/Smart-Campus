@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -6,8 +6,9 @@ import { ArrowRight, ReceiptText, Search, Soup } from 'lucide-react-native';
 import { cafeteriaService, MenuSort } from '../services/cafeteria.service';
 import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { MenuCategory, MenuItem, RootStackParamList } from '../types';
-import { useCartStore, cartCount, cartTotal } from '../store/cartStore';
+import { useCartStore, cartCount, cartTotal, maxQuantityFor } from '../store/cartStore';
 import { AppText } from '../components/AppText';
+import { Button } from '../components/Button';
 import { Chips } from '../components/Chips';
 import { Field } from '../components/Field';
 import { isKitchenOpenAt, kitchenHoursLabel, useCampusStore } from '../store/campusStore';
@@ -46,24 +47,30 @@ export const CafeteriaScreen: React.FC = () => {
   const [sort, setSort] = useState<MenuSort>('name');
   const [diet, setDiet] = useState<DietFilter>('none');
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const latestRequest = useRef(0);
   const campus = useCampusStore(state => state.settings);
   const hours = kitchenHoursLabel(campus);
   const kitchenOpen = isKitchenOpenAt(campus, new Date());
 
   const loadMenu = useCallback(async () => {
+    // Responses can arrive out of order while typing; only the newest request may update the list.
+    const request = ++latestRequest.current;
     try {
-      setMenu(
-        await cafeteriaService.getMenu({
-          search,
-          sort,
-          vegOnly: vegOnly === 'veg',
-          excludeAllergens: diet === 'none' ? undefined : ALLERGEN_GROUPS[diet],
-        })
-      );
+      const result = await cafeteriaService.getMenu({
+        search,
+        sort,
+        vegOnly: vegOnly === 'veg',
+        excludeAllergens: diet === 'none' ? undefined : ALLERGEN_GROUPS[diet],
+      });
+      if (request !== latestRequest.current) return;
+      setMenu(result);
+      setFailed(false);
     } catch {
-      /* keep last known menu */
+      /* keep the last known menu on screen */
+      if (request === latestRequest.current) setFailed(true);
     } finally {
-      setLoaded(true);
+      if (request === latestRequest.current) setLoaded(true);
     }
   }, [search, sort, vegOnly, diet]);
 
@@ -143,8 +150,11 @@ export const CafeteriaScreen: React.FC = () => {
         {items.length === 0 ? (
           <EmptyState
             icon={Soup}
-            title={loaded ? 'Nothing matches' : 'Loading the menu…'}
-            description={loaded ? 'Try another category, or clear the search and filters.' : 'One moment.'}
+            title={!loaded ? 'Loading the menu…' : failed ? 'Couldn’t load the menu' : 'Nothing matches'}
+            description={
+              !loaded ? 'One moment.' : failed ? 'Check your connection and try again.' : 'Try another category, or clear the search and filters.'
+            }
+            action={loaded && failed ? <Button title="Try again" variant="secondary" onPress={loadMenu} /> : undefined}
           />
         ) : (
           <View style={styles.menu}>
@@ -248,7 +258,7 @@ const MenuRow: React.FC<MenuRowProps> = ({ item, quantity, last, onOpen, onAdd, 
           Sold out
         </AppText>
       ) : quantity > 0 ? (
-        <Stepper compact value={quantity} onChange={onChangeQuantity} />
+        <Stepper compact max={maxQuantityFor(item)} value={quantity} onChange={onChangeQuantity} />
       ) : (
         <Pressable
           onPress={onAdd}

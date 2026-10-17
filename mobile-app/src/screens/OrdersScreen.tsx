@@ -53,6 +53,7 @@ export const OrdersScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [busyReorder, setBusyReorder] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const orders = [...latest, ...older.filter(o => !latest.some(l => l.id === o.id))];
 
@@ -73,6 +74,8 @@ export const OrdersScreen: React.FC = () => {
       }
     } catch {
       /* keep what's on screen */
+    } finally {
+      setLoaded(true);
     }
   }, []);
 
@@ -145,9 +148,9 @@ export const OrdersScreen: React.FC = () => {
       <Screen>
         <EmptyState
           icon={ReceiptText}
-          title="No orders yet"
-          description="Order ahead from the cafeteria and track it here."
-          action={<Button title="See the menu" variant="secondary" onPress={() => navigation.navigate('Main', { screen: 'CafeteriaTab' })} />}
+          title={loaded ? 'No orders yet' : 'Loading your orders…'}
+          description={loaded ? 'Order ahead from the cafeteria and track it here.' : 'One moment.'}
+          action={!loaded ? undefined : <Button title="See the menu" variant="secondary" onPress={() => navigation.navigate('Main', { screen: 'CafeteriaTab' })} />}
         />
       </Screen>
     );
@@ -224,7 +227,8 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onCancel, onReorder, reord
   const content = (
     <>
       <View style={styles.header}>
-        <View>
+        {/* flex: 1 so long details (table number, pickup time) wrap inside the card instead of pushing the badge out */}
+        <View style={styles.flex}>
           <AppText variant="heading">{order.orderToken}</AppText>
           <AppText variant="caption" tone="ink3" style={styles.meta}>
             {placedAt(order.createdAt)} · {order.orderType === 'PICKUP' ? 'Pick up' : `Dine in${order.tableNumber ? ` · table ${order.tableNumber}` : ''}`}

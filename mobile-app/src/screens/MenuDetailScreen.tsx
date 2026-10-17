@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { MenuItem, MenuReview, RootStackParamList } from '../types';
@@ -7,7 +7,7 @@ import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
 import { Chips } from '../components/Chips';
 import { Field } from '../components/Field';
 import { Card } from '../components/Card';
-import { useCartStore } from '../store/cartStore';
+import { maxQuantityFor, useCartStore } from '../store/cartStore';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Screen, StickyFooter } from '../components/Screen';
@@ -38,6 +38,8 @@ const ReviewsSection: React.FC<{ item: MenuItem }> = ({ item }) => {
   const [rating, setRating] = useState<(typeof RATINGS)[number]>('5');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
+  // Fill the form from the saved review once; later live refreshes must not overwrite what the user is typing.
+  const prefilled = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -46,7 +48,8 @@ const ReviewsSection: React.FC<{ item: MenuItem }> = ({ item }) => {
       setDistribution(list.distribution);
       setCanReview(state.canReview);
       setMine(state.review);
-      if (state.review) {
+      if (state.review && !prefilled.current) {
+        prefilled.current = true;
         setRating(String(state.review.rating) as (typeof RATINGS)[number]);
         setComment(state.review.comment ?? '');
       }
@@ -68,8 +71,10 @@ const ReviewsSection: React.FC<{ item: MenuItem }> = ({ item }) => {
     [item.id, load]
   );
 
-  const total = reviews.length;
-  if (total === 0 && !canReview) return null;
+  // The list is paged, so count and average come from the full-dish histogram.
+  const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+  const average = total ? [1, 2, 3, 4, 5].reduce((sum, star) => sum + star * (distribution[star] ?? 0), 0) / total : 0;
+  if (reviews.length === 0 && !canReview) return null;
 
   const submit = async () => {
     setSaving(true);
@@ -88,6 +93,8 @@ const ReviewsSection: React.FC<{ item: MenuItem }> = ({ item }) => {
       await cafeteriaService.deleteReview(item.id);
       setMine(null);
       setComment('');
+      setRating('5');
+      prefilled.current = false;
       await load();
     } catch (error) {
       Alert.alert('Could not remove your review', getErrorMessage(error, 'Please try again.'));
@@ -100,7 +107,7 @@ const ReviewsSection: React.FC<{ item: MenuItem }> = ({ item }) => {
       {total > 0 && (
         <>
           <AppText variant="caption" tone="ink3" style={styles.sectionBody}>
-            {`${item.rating.toFixed(1)} average · ${total} ${total === 1 ? 'review' : 'reviews'}`}
+            {`${average.toFixed(1)} average · ${total} ${total === 1 ? 'review' : 'reviews'}`}
           </AppText>
           <View style={styles.distribution}>
             {[5, 4, 3, 2, 1].map(star => (
@@ -175,8 +182,9 @@ export const MenuDetailScreen: React.FC = () => {
   const [quantity, setLocalQuantity] = useState(inCart || 1);
 
   const handleConfirm = () => {
-    if (inCart) setQuantity(item.id, quantity);
-    else add(item, quantity);
+    const qty = Math.min(quantity, maxQuantityFor(item));
+    if (inCart) setQuantity(item.id, qty);
+    else add(item, qty);
     navigation.goBack();
   };
 
@@ -204,7 +212,7 @@ export const MenuDetailScreen: React.FC = () => {
 
         <View style={styles.tags}>
           <VegMark isVeg={item.isVeg} />
-          <AppText variant="caption" tone="ink3">
+          <AppText variant="caption" tone="ink3" style={styles.tagText}>
             {item.isVeg ? 'Vegetarian' : 'Non-vegetarian'} · {humanize(item.category)} · {SPICE[item.spiceLevel] ?? 'Not spicy'}
           </AppText>
         </View>
@@ -280,7 +288,7 @@ export const MenuDetailScreen: React.FC = () => {
               {formatCurrency(item.price)} each
             </AppText>
           </View>
-          <Stepper value={quantity} onChange={setLocalQuantity} min={inCart ? 0 : 1} />
+          <Stepper value={Math.min(quantity, maxQuantityFor(item))} onChange={setLocalQuantity} min={inCart ? 0 : 1} max={maxQuantityFor(item)} />
         </View>
       </Screen>
 
@@ -302,6 +310,7 @@ export const MenuDetailScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.canvas },
+  tagText: { flex: 1 },
   tags: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.md },
   gallery: { marginBottom: spacing.lg, marginHorizontal: 0 },
   photo: { height: 220, borderRadius: radius.lg, backgroundColor: colors.sunken },
