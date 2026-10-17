@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChefHat, Plus, Search, Soup, Star } from 'lucide-react';
 import { cafeteriaService, MenuItemInput, OrderSearch } from '../services/cafeteria.service';
 import { REALTIME_EVENTS } from '../services/socket';
@@ -150,6 +150,7 @@ export const CafeteriaPage: React.FC = () => {
   const [historyPage, setHistoryPage] = useState(1);
   const [history, setHistory] = useState<{ orders: Order[]; total: number; totalPages: number } | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRequest = useRef(0);
 
   const loadStats = useCallback(async () => {
     try {
@@ -245,14 +246,19 @@ export const CafeteriaPage: React.FC = () => {
         from: historyFrom ? new Date(`${historyFrom}T00:00:00`).toISOString() : undefined,
         to: historyTo ? new Date(`${historyTo}T23:59:59.999`).toISOString() : undefined,
         page: historyPage,
+        // History is finished orders only; live ones belong on the board.
+        active: historyStatus === 'ALL' ? false : undefined,
       };
+      // A slow earlier response must not overwrite the result of a newer query.
+      const request = ++historyRequest.current;
       setHistoryLoading(true);
       try {
-        setHistory(await cafeteriaService.searchOrders(query));
+        const result = await cafeteriaService.searchOrders(query);
+        if (request === historyRequest.current) setHistory(result);
       } catch (err) {
-        toast.error(getErrorMessage(err, 'Couldn’t load order history.'));
+        if (request === historyRequest.current) toast.error(getErrorMessage(err, 'Couldn’t load order history.'));
       } finally {
-        setHistoryLoading(false);
+        if (request === historyRequest.current) setHistoryLoading(false);
       }
     }, 250);
     return () => clearTimeout(handle);
@@ -291,8 +297,11 @@ export const CafeteriaPage: React.FC = () => {
   const toggleAvailability = async (item: MenuItem, isAvailable: boolean) => {
     setMenu(prev => prev.map(m => (m.id === item.id ? { ...m, isAvailable } : m)));
     try {
-      await cafeteriaService.updateMenuItem(item.id, { isAvailable });
-      toast.success(`${item.name} ${isAvailable ? 'is back on the menu' : 'marked sold out'}`);
+      const saved = await cafeteriaService.updateMenuItem(item.id, { isAvailable });
+      // The server is the authority (e.g. a dish with 0 portions can't be switched on).
+      setMenu(prev => prev.map(m => (m.id === item.id ? saved : m)));
+      if (isAvailable && !saved.isAvailable) toast.error(`${item.name} has no portions left — set its stock first`);
+      else toast.success(`${item.name} ${saved.isAvailable ? 'is back on the menu' : 'marked sold out'}`);
     } catch (err) {
       setMenu(prev => prev.map(m => (m.id === item.id ? { ...m, isAvailable: !isAvailable } : m)));
       toast.error(getErrorMessage(err, `Couldn’t update ${item.name}.`));
@@ -355,6 +364,15 @@ export const CafeteriaPage: React.FC = () => {
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
+    const price = parseFloat(form.price);
+    if (!form.name.trim() || form.name.trim().length < 2) return void toast.error('Give the dish a name (at least 2 characters).');
+    if (!Number.isFinite(price) || price <= 0) return void toast.error('Enter a price greater than 0.');
+    const numbers = [form.stock, form.calories, form.proteinG, form.carbsG, form.fatG, form.fiberG, form.sugarG, form.sodiumMg];
+    if (numbers.some(v => v.trim() !== '' && (!Number.isFinite(Number(v)) || Number(v) < 0))) {
+      return void toast.error('Stock and nutrition values must be numbers, 0 or more.');
+    }
+    if (form.stock.trim() !== '' && !Number.isInteger(Number(form.stock))) return void toast.error('Stock must be a whole number.');
+    if (form.calories.trim() !== '' && !Number.isInteger(Number(form.calories))) return void toast.error('Calories must be a whole number.');
     setSaving(true);
     // When editing, a blank nutrition field is sent as null so the stored value is cleared.
     const blank = form.id ? null : undefined;
@@ -362,7 +380,7 @@ export const CafeteriaPage: React.FC = () => {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       category: form.category,
-      price: parseFloat(form.price),
+      price,
       isVeg: form.isVeg,
       spiceLevel: parseInt(form.spiceLevel, 10),
       imageUrl: form.photos[0],
@@ -510,11 +528,9 @@ export const CafeteriaPage: React.FC = () => {
                           <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-line">
                             <span className="text-sm text-ink tabular">{formatCurrency(order.totalAmount)}</span>
                             <div className="flex items-center gap-1">
-                              {(order.status === 'PLACED' || order.status === 'ACCEPTED') && (
-                                <Button size="sm" variant="ghost" onClick={() => setCancelTarget(order)}>
-                                  Cancel
-                                </Button>
-                              )}
+                              <Button size="sm" variant="ghost" onClick={() => setCancelTarget(order)}>
+                                Cancel
+                              </Button>
                               {next && (
                                 <Button
                                   size="sm"
