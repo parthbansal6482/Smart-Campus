@@ -3,7 +3,7 @@ import { MenuCategory, OrderStatus, OrderType, Prisma, Role } from '@prisma/clie
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../utils/errors';
 import { settingsService } from '../settings/settings.service';
 import { emitMenuChanged, emitReviewsChanged } from './cafeteria.events';
-import { averageRating, canTransition, isValidPickupTime, isWithinOpeningHours } from './orderRules';
+import { ORDER_FLOW, averageRating, canTransition, isValidPickupTime, isWithinOpeningHours } from './orderRules';
 import { notifyUser, notifyRoles } from '../../services/notification.service';
 import { getSocketIO } from '../../sockets/socket.server';
 
@@ -138,6 +138,9 @@ export class CafeteriaService {
       if (patch.stock === 0) patch.isAvailable = false;
       else if (item.stock === 0 && !item.isAvailable) patch.isAvailable = true;
     }
+    // A dish with no portions can't be available, even if staff ask for it.
+    const effectiveStock = patch.stock === undefined ? item.stock : patch.stock;
+    if (effectiveStock === 0 && patch.isAvailable === true) patch.isAvailable = false;
     const updated = await prisma.menuItem.update({ where: { id }, data: patch });
     emitMenuChanged([id], patch.isArchived === true ? 'archived' : 'updated');
     return updated;
@@ -204,13 +207,20 @@ export class CafeteriaService {
   async getOrders(params: {
     userId?: string;
     status?: OrderStatus;
+    activeOnly?: boolean;
     search?: string;
     from?: string;
     to?: string;
     skip: number;
     take: number;
   }) {
-    const where: Prisma.OrderWhereInput = { userId: params.userId, status: params.status };
+    const where: Prisma.OrderWhereInput = {
+      userId: params.userId,
+      status:
+        params.activeOnly === undefined
+          ? params.status
+          : { in: params.activeOnly ? ORDER_FLOW.filter(s => s !== OrderStatus.COLLECTED) : [OrderStatus.COLLECTED, OrderStatus.CANCELLED] },
+    };
 
     if (params.from || params.to) {
       where.createdAt = {
@@ -321,6 +331,9 @@ export class CafeteriaService {
     // orderNumber is a DB-generated autoincrement, so the human-readable
     // token derived from it can never collide the way a random 3-digit
     // suffix could.
+    // Claim in a fixed order so two orders sharing dishes can't deadlock each other.
+    orderItemData.sort((a, b) => a.menuItemId.localeCompare(b.menuItemId));
+
     const order = await prisma.$transaction(async tx => {
       // Claim stock atomically: the conditional UPDATE only matches while enough portions remain,
       // so two simultaneous orders can't both take the last one. Selling the last portion marks
@@ -374,7 +387,7 @@ export class CafeteriaService {
         data: {
           userId,
           orderType: data.orderType,
-          tableNumber: data.tableNumber,
+          tableNumber: data.orderType === OrderType.DINE_IN ? data.tableNumber?.trim() || undefined : undefined,
           orderToken: '', // placeholder, set below once orderNumber is known
           offerCode: appliedOfferCode,
           discountAmount,
@@ -405,12 +418,13 @@ export class CafeteriaService {
     } catch {
       /* socket layer not initialized (e.g. tests) */
     }
+    // The order is already saved; a failed notification must not make the customer retry and double-order.
     await notifyRoles([Role.CAFETERIA_STAFF, Role.ADMIN], {
       type: 'ORDER',
       title: 'New order',
       body: `${order.orderToken} — ${order.orderItems.length} item(s)`,
       data: { orderId: order.id },
-    });
+    }).catch(() => undefined);
 
     return order;
   }
@@ -439,6 +453,13 @@ export class CafeteriaService {
     }
 
     const updated = await prisma.$transaction(async tx => {
+      // Re-check the status inside the transaction: if two people act at once (or the customer
+      // cancels as staff accept), only one wins, so stock and offers are never restored twice.
+      const moved = await tx.order.updateMany({ where: { id, status: order.status }, data: { status } });
+      if (moved.count === 0) {
+        throw new ConflictError('This order was just updated by someone else — refresh and try again');
+      }
+
       // A cancelled order gives its offer redemption back, so a limited
       // offer isn't permanently consumed by an order that never happened.
       if (status === OrderStatus.CANCELLED && order.offerCode) {
@@ -460,7 +481,7 @@ export class CafeteriaService {
           `;
         }
       }
-      return tx.order.update({ where: { id }, data: { status }, include: orderInclude });
+      return tx.order.findUniqueOrThrow({ where: { id }, include: orderInclude });
     });
 
     if (status === OrderStatus.CANCELLED) {
@@ -477,13 +498,16 @@ export class CafeteriaService {
       /* socket layer not initialized (e.g. tests) */
     }
 
-    await notifyUser({
-      userId: updated.userId,
-      type: 'ORDER',
-      title: 'Order update',
-      body: `${updated.orderToken} is now ${status.toLowerCase()}`,
-      data: { orderId: id, status },
-    });
+    // Don't tell people about a cancellation they just made themselves.
+    if (!(status === OrderStatus.CANCELLED && actor.userId === updated.userId)) {
+      await notifyUser({
+        userId: updated.userId,
+        type: 'ORDER',
+        title: 'Order update',
+        body: `${updated.orderToken} is now ${status.toLowerCase()}`,
+        data: { orderId: id, status },
+      }).catch(() => undefined);
+    }
 
     return updated;
   }

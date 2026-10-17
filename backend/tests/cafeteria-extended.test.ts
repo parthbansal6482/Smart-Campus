@@ -8,6 +8,8 @@ const tag = randomUUID().slice(0, 6);
 let staffToken: string;
 let tracked: { id: string };
 let plain: { id: string };
+// Extra dishes created inside tests; removed after the users (and so their orders) are cleaned up.
+const extraItems: string[] = [];
 
 beforeAll(async () => {
   staffToken = (await loginAsCafeteriaStaff()).accessToken;
@@ -19,7 +21,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanupRegisteredUsers();
-  await prisma.menuItem.deleteMany({ where: { id: { in: [tracked.id, plain.id] } } });
+  await prisma.menuItem.deleteMany({ where: { id: { in: [tracked.id, plain.id, ...extraItems] } } });
 });
 
 const order = (token: string, menuItemId: string, quantity = 1, extra: object = {}) =>
@@ -209,5 +211,61 @@ describe('removed dishes', () => {
     expect(restored.status).toBe(200);
     const after = await request(app).get('/api/v1/cafeteria/menu').query({ search: tag });
     expect(ids(after)).toContain(plain.id);
+  });
+});
+
+describe('consistency', () => {
+  it('restores stock only once when a cancel is sent twice at the same time', async () => {
+    const item = await prisma.menuItem.create({ data: { name: `Race ${tag}`, price: 5, category: 'SNACKS', stock: 5 } });
+    try {
+      const student = await createStudent();
+      const placed = await order(student.accessToken, item.id, 2);
+      expect(placed.status).toBe(201);
+
+      const results = await Promise.all([
+        setStatus(student.accessToken, placed.body.data.id, 'CANCELLED'),
+        setStatus(staffToken, placed.body.data.id, 'CANCELLED'),
+      ]);
+      expect(results.map(r => r.status).sort()).toEqual([200, 409]);
+      expect((await prisma.menuItem.findUnique({ where: { id: item.id } }))?.stock).toBe(5);
+    } finally {
+      extraItems.push(item.id);
+    }
+  });
+
+  it('keeps a dish with no portions unavailable even if staff try to switch it on', async () => {
+    const item = await prisma.menuItem.create({ data: { name: `Empty ${tag}`, price: 5, category: 'SNACKS', stock: 0, isAvailable: false } });
+    try {
+      const res = await request(app)
+        .patch(`/api/v1/cafeteria/menu/${item.id}`)
+        .set('Authorization', authed(staffToken))
+        .send({ isAvailable: true });
+      expect(res.status).toBe(200);
+      expect(res.body.data.isAvailable).toBe(false);
+    } finally {
+      extraItems.push(item.id);
+    }
+  });
+
+  it('lists only open orders for the board and only finished ones for history', async () => {
+    const student = await createStudent();
+    const open = await order(student.accessToken, plain.id);
+    const done = await order(student.accessToken, plain.id);
+    await setStatus(student.accessToken, done.body.data.id, 'CANCELLED');
+
+    const ids = async (active: string) =>
+      (
+        await request(app)
+          .get('/api/v1/cafeteria/orders')
+          .set('Authorization', authed(staffToken))
+          .query({ all: 'true', active, limit: 100 })
+      ).body.data.map((o: { id: string }) => o.id);
+
+    const board = await ids('true');
+    expect(board).toContain(open.body.data.id);
+    expect(board).not.toContain(done.body.data.id);
+    const history = await ids('false');
+    expect(history).toContain(done.body.data.id);
+    expect(history).not.toContain(open.body.data.id);
   });
 });
