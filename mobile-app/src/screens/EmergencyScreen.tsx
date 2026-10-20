@@ -20,9 +20,6 @@ type Tag = 'NONE' | 'INJURY' | 'FAINTED' | 'ALLERGIC_REACTION' | 'OTHER';
 
 const COUNTDOWN_SECONDS = 3;
 
-// Placeholder until the screen reads the device location and resolves the nearest building.
-const LOCATION = { building: 'RTH Academic Block', detail: 'Ground floor, near RTH-105' };
-
 const TAGS: { value: Tag; label: string }[] = [
   { value: 'INJURY', label: 'Injury' },
   { value: 'FAINTED', label: 'Fainted' },
@@ -38,6 +35,7 @@ export const EmergencyScreen: React.FC = () => {
   const [tag, setTag] = useState<Tag>('NONE');
   const [sentAt, setSentAt] = useState<Date | null>(null);
   const [emergencyId, setEmergencyId] = useState<string | null>(null);
+  const [locationLabel, setLocationLabel] = useState('Current device location');
   const [status, setStatus] = useState<EmergencyStatus>('REPORTED');
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -70,11 +68,11 @@ export const EmergencyScreen: React.FC = () => {
       const emergency = await medicalService.triggerEmergency({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-        locationDetail: LOCATION.detail,
         tag: tag === 'NONE' ? undefined : tag,
       });
 
       setEmergencyId(emergency.id);
+      setLocationLabel(emergency.building?.name || 'Location shared from device');
       setSentAt(new Date());
       setPhase('sent');
       await emergencyTracking.start(emergency.id);
@@ -170,9 +168,9 @@ export const EmergencyScreen: React.FC = () => {
           <View style={styles.location}>
             <MapPin size={18} color={colors.critical} />
             <View style={styles.flex}>
-              <AppText variant="bodyMedium">{LOCATION.building}</AppText>
+              <AppText variant="bodyMedium">{locationLabel}</AppText>
               <AppText variant="caption" tone="ink3">
-                {LOCATION.detail}
+                {locationLabel === 'Current device location' ? 'GPS will be shared with responders' : 'Resolved from your emergency location'}
               </AppText>
             </View>
           </View>
@@ -223,7 +221,7 @@ export const EmergencyScreen: React.FC = () => {
           </View>
 
           <View style={styles.timeline}>
-            <TimelineStep done title="Alert sent" detail={`${LOCATION.building} · ${sentAt ? formatTime(sentAt) : ''}`} />
+            <TimelineStep done title="Alert sent" detail={`${locationLabel} · ${sentAt ? formatTime(sentAt) : ''}`} />
             <TimelineStep
               done={progress >= 1}
               current={progress === 0}
