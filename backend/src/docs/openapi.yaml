@@ -544,6 +544,39 @@ paths:
         '200': { description: Updated, reporter notified }
         '409': { description: Invalid status transition }
 
+  /medical-help/emergencies/{id}/location:
+    post:
+      tags: [Medical Help]
+      summary: Record a reporter GPS fix for an active emergency
+      description: Only the reporter may stream fixes. Updates are limited to one per second per incident and the stored trail keeps the newest 2000 pings.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number, minimum: -90, maximum: 90 }
+                longitude: { type: number, minimum: -180, maximum: 180 }
+                accuracyM: { type: number, minimum: 0 }
+      responses:
+        '201': { description: Location fix recorded and broadcast to the incident room }
+        '409': { description: Incident is no longer active }
+        '429': { description: Location updates are arriving too quickly }
+    get:
+      tags: [Medical Help]
+      summary: Read an emergency's location trail
+      description: The reporter and medical responders may read the newest fixes in chronological order.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200': { description: Location fixes returned oldest first }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /medical-help/medicines:
     get:
       tags: [Medical Help]
