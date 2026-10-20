@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,12 +10,37 @@ import { Card } from '../components/Card';
 import { ListGroup, ListItem } from '../components/ListItem';
 import { Screen, SectionLabel } from '../components/Screen';
 import { StatusBadge } from '../components/StatusBadge';
-import { colors, radius, spacing } from '../theme';
+import { colors, radius, spacing, Tone } from '../theme';
 import { useCampusStore } from '../store/campusStore';
+import { Emergency } from '../types';
+import { medicalService } from '../services/medical.service';
+import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
+import { humanize } from '../lib/format';
+
+const emergencyTone: Record<Emergency['status'], Tone> = {
+  REPORTED: 'critical',
+  ASSIGNED: 'info',
+  ON_THE_WAY: 'warn',
+  ARRIVED: 'ok',
+  HANDLED: 'neutral',
+  CANCELLED: 'critical',
+};
+
+const emergencyDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const MedicalHelpScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const campus = useCampusStore(state => state.settings);
+  const [emergencies, setEmergencies] = useState<Emergency[]>([]);
+
+  const loadEmergencies = useCallback(() => {
+    medicalService.getMyEmergencies().then(setEmergencies).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadEmergencies();
+    return realtimeEvents.on(REALTIME_EVENTS.medicalChanged, loadEmergencies);
+  }, [loadEmergencies]);
 
   return (
     <Screen topInset title="Health" subtitle="Emergency help, the campus pharmacy and the medical centre.">
@@ -63,16 +88,28 @@ export const MedicalHelpScreen: React.FC = () => {
         />
       </ListGroup>
 
-      <SectionLabel>Recent requests</SectionLabel>
-      <Card>
-        <View style={styles.requestTop}>
-          <AppText variant="subheading">Minor cut in the lab</AppText>
-          <StatusBadge label="Resolved" tone="ok" />
+      <SectionLabel>Recent emergency alerts</SectionLabel>
+      {emergencies.length === 0 ? (
+        <Card>
+          <AppText variant="body" tone="ink2">Your emergency alerts will appear here.</AppText>
+        </Card>
+      ) : (
+        <View style={styles.requests}>
+          {emergencies.slice(0, 3).map(emergency => (
+            <Card key={emergency.id}>
+              <View style={styles.requestTop}>
+                <View style={styles.flex}>
+                  <AppText variant="subheading">{humanize(emergency.tag)}</AppText>
+                  <AppText variant="caption" tone="ink3" style={styles.requestMeta}>
+                    {emergencyDate(emergency.reportedAt)} · {emergency.building?.name || 'Location shared from device'}
+                  </AppText>
+                </View>
+                <StatusBadge label={humanize(emergency.status)} tone={emergencyTone[emergency.status]} />
+              </View>
+            </Card>
+          ))}
         </View>
-        <AppText variant="caption" tone="ink3" style={styles.requestMeta}>
-          Yesterday, 4:15 PM · Marie Curie Science Complex, floor 1
-        </AppText>
-      </Card>
+      )}
     </Screen>
   );
 };
@@ -88,6 +125,8 @@ const styles = StyleSheet.create({
   emergencyTitle: { color: colors.critical },
   emergencyText: { marginTop: 6, marginBottom: spacing.xl },
   callRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: spacing.lg },
+  requests: { gap: spacing.md },
+  flex: { flex: 1 },
   requestTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   requestMeta: { marginTop: 4 },
 });
