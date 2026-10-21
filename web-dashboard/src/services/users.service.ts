@@ -11,4 +11,9 @@ export const usersService = {
     const res = await api.patch<ApiResponse<User>>(`/users/${id}/role`, { role });
     return res.data.data;
   },
+
+  updateActive: async (id: string, isActive: boolean): Promise<User> => {
+    const res = await api.patch<ApiResponse<User>>(`/users/${id}/active`, { isActive });
+    return res.data.data;
+  },
 };

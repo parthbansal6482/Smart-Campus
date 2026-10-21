@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Search, Users } from 'lucide-react';
+import { CheckCircle2, Search, Users, XCircle } from 'lucide-react';
 import { usersService } from '../services/users.service';
 import { REALTIME_EVENTS } from '../services/socket';
 import { useAuthStore } from '../store/authStore';
@@ -12,6 +12,7 @@ import { Avatar, EmptyState, PageHeader, SkeletonRows } from '../components/ui/F
 import { toast } from '../components/ui/Toast';
 import { roleLabel } from '../lib/status';
 import { formatDate, getErrorMessage } from '../lib/utils';
+import { Button } from '../components/ui/Button';
 
 const roles = Object.keys(roleLabel) as Role[];
 
@@ -22,6 +23,7 @@ export const UsersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | Role>('ALL');
   const [pendingChange, setPendingChange] = useState<{ user: User; role: Role } | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<{ user: User; isActive: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const loadUsers = useCallback(
@@ -59,6 +61,21 @@ export const UsersPage: React.FC = () => {
     } finally {
       setSaving(false);
       setPendingChange(null);
+    }
+  };
+
+  const confirmStatusChange = async () => {
+    if (!pendingStatus) return;
+    setSaving(true);
+    try {
+      const updated = await usersService.updateActive(pendingStatus.user.id, pendingStatus.isActive);
+      setUsers(prev => prev.map(u => (u.id === updated.id ? { ...u, isActive: updated.isActive } : u)));
+      toast.success(`${pendingStatus.user.name} is ${pendingStatus.isActive ? 'active' : 'deactivated'}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Couldn’t update account status.'));
+    } finally {
+      setSaving(false);
+      setPendingStatus(null);
     }
   };
 
@@ -112,6 +129,7 @@ export const UsersPage: React.FC = () => {
                 <TH>Name</TH>
                 <TH>Phone</TH>
                 <TH>Joined</TH>
+                <TH>Status</TH>
                 <TH className="w-56">Role</TH>
               </tr>
             </THead>
@@ -134,6 +152,18 @@ export const UsersPage: React.FC = () => {
                     </TD>
                     <TD className="tabular">{user.phone || '—'}</TD>
                     <TD className="whitespace-nowrap">{formatDate(user.createdAt)}</TD>
+                    <TD>
+                      <Button
+                        variant={user.isActive ? 'secondary' : 'ghost'}
+                        size="sm"
+                        disabled={isSelf}
+                        title={isSelf ? 'You can’t change your own status' : undefined}
+                        onClick={() => setPendingStatus({ user, isActive: !user.isActive })}
+                      >
+                        {user.isActive ? <CheckCircle2 className="w-3.5 h-3.5 text-positive" /> : <XCircle className="w-3.5 h-3.5 text-critical" />}
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </Button>
+                    </TD>
                     <TD>
                       <Select
                         aria-label={`Role for ${user.name}`}
@@ -170,6 +200,21 @@ export const UsersPage: React.FC = () => {
         isLoading={saving}
         onConfirm={confirmRoleChange}
         onCancel={() => setPendingChange(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingStatus}
+        title={pendingStatus?.isActive ? 'Reactivate account?' : 'Deactivate account?'}
+        description={
+          pendingStatus
+            ? `${pendingStatus.user.name} will be ${pendingStatus.isActive ? 'able' : 'unable'} to sign in${pendingStatus.isActive ? '' : ' and will be signed out of active sessions'}.`
+            : ''
+        }
+        confirmLabel={pendingStatus?.isActive ? 'Reactivate' : 'Deactivate'}
+        destructive={!pendingStatus?.isActive}
+        isLoading={saving}
+        onConfirm={confirmStatusChange}
+        onCancel={() => setPendingStatus(null)}
       />
     </>
   );
