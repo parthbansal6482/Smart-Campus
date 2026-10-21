@@ -32,6 +32,11 @@ export const authService = {
     return res.data.data;
   },
 
+  updateProfile: async (data: { name?: string; phone?: string }): Promise<User> => {
+    const res = await api.patch<{ success: boolean; data: User }>('/users/me', data);
+    return res.data.data;
+  },
+
   /** Best-effort — revokes the refresh token server-side so it can't be replayed after sign-out. */
   logout: async (refreshToken: string | null): Promise<void> => {
     if (!refreshToken) return;

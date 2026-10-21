@@ -17,6 +17,7 @@ interface AuthState {
   loadSession: () => Promise<void>;
   /** Re-reads the signed-in user's profile; a failure never signs them out. */
   refreshUser: () => Promise<void>;
+  updateProfile: (data: { name?: string; phone?: string }) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>(set => ({
@@ -32,6 +33,12 @@ export const useAuthStore = create<AuthState>(set => ({
     } catch {
       /* keep the profile we have; the next change or reconnect retries */
     }
+  },
+
+  updateProfile: async data => {
+    const user = await authService.updateProfile(data);
+    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    set({ user });
   },
 
   loadSession: async () => {
