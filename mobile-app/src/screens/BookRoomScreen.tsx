@@ -53,6 +53,8 @@ export const BookRoomScreen: React.FC = () => {
   const [duration, setDuration] = useState<'1' | '2' | '3'>('1');
   const [purpose, setPurpose] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [slotAvailability, setSlotAvailability] = useState<boolean | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const slotOptions = SLOTS.filter(h => day !== '0' || h > currentHour).map(h => ({
     value: String(h),
@@ -65,6 +67,39 @@ export const BookRoomScreen: React.FC = () => {
   const dayLabel = days.find(d => d.value === day)?.label;
   const summary = `${dayLabel}, ${slotLabel(startHour)} – ${slotLabel(endHour)}`;
 
+  const selectedWindow = () => {
+    const startTime = new Date();
+    startTime.setDate(startTime.getDate() + Number(day));
+    startTime.setHours(startHour, 0, 0, 0);
+    return { startTime, endTime: new Date(startTime.getTime() + Number(duration) * 3600_000) };
+  };
+
+  useEffect(() => {
+    if (!room || slotOptions.length === 0 || endHour > 23) {
+      setSlotAvailability(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingAvailability(true);
+    const { startTime, endTime } = selectedWindow();
+    classroomService
+      .getAvailableRooms(startTime.toISOString(), endTime.toISOString())
+      .then(availableRooms => {
+        if (!cancelled) setSlotAvailability(availableRooms.some(candidate => candidate.id === room.id));
+      })
+      .catch(() => {
+        if (!cancelled) setSlotAvailability(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingAvailability(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [day, duration, effectiveStart, endHour, room, slotOptions.length]);
+
   const handleBook = async () => {
     if (!room) return;
     if (!purpose.trim()) {
@@ -72,10 +107,12 @@ export const BookRoomScreen: React.FC = () => {
       return;
     }
 
-    const startTime = new Date();
-    startTime.setDate(startTime.getDate() + Number(day));
-    startTime.setHours(startHour, 0, 0, 0);
-    const endTime = new Date(startTime.getTime() + Number(duration) * 3600_000);
+    const { startTime, endTime } = selectedWindow();
+
+    if (slotAvailability === false) {
+      Alert.alert('Room is no longer available', 'Choose another time or go back and select a different room.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -145,6 +182,20 @@ export const BookRoomScreen: React.FC = () => {
 
         <SectionLabel>Purpose</SectionLabel>
         <Field value={purpose} onChangeText={setPurpose} placeholder="e.g. Group study, project review" />
+
+        {checkingAvailability ? (
+          <AppText variant="caption" tone="ink3" style={styles.availability}>
+            Checking this room’s availability…
+          </AppText>
+        ) : slotAvailability === true ? (
+          <AppText variant="caption" tone="ok" style={styles.availability}>
+            This room is available for your selected time.
+          </AppText>
+        ) : slotAvailability === false ? (
+          <AppText variant="caption" tone="critical" style={styles.availability}>
+            This room is already booked for your selected time.
+          </AppText>
+        ) : null}
       </Screen>
 
       <StickyFooter>
@@ -154,7 +205,12 @@ export const BookRoomScreen: React.FC = () => {
           </AppText>
           <AppText variant="bodyMedium">{summary}</AppText>
         </View>
-        <Button title="Book room" onPress={handleBook} isLoading={submitting} disabled={slotOptions.length === 0} />
+        <Button
+          title="Book room"
+          onPress={handleBook}
+          isLoading={submitting || checkingAvailability}
+          disabled={slotOptions.length === 0 || slotAvailability === false}
+        />
       </StickyFooter>
     </KeyboardAvoidingView>
   );
@@ -166,4 +222,5 @@ const styles = StyleSheet.create({
   roomRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   meta: { marginTop: 4 },
   summary: { marginBottom: spacing.md },
+  availability: { marginTop: -spacing.sm, marginBottom: spacing.md },
 });
