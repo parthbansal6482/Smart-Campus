@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Building2, MessageCircle, Phone, Pill } from 'lucide-react-native';
@@ -37,6 +37,23 @@ export const MedicalHelpScreen: React.FC = () => {
     medicalService.getMyEmergencies().then(setEmergencies).catch(() => undefined);
   }, []);
 
+  const activeEmergency = emergencies.find(e => !['HANDLED', 'CANCELLED'].includes(e.status));
+
+  const cancelActiveEmergency = () => {
+    if (!activeEmergency) return;
+    Alert.alert('Cancel this emergency alert?', 'Only cancel if you no longer need help.', [
+      { text: 'Keep alert', style: 'cancel' },
+      {
+        text: 'I’m safe — cancel',
+        style: 'destructive',
+        onPress: async () => {
+          await medicalService.cancelEmergency(activeEmergency.id).catch(() => undefined);
+          loadEmergencies();
+        },
+      },
+    ]);
+  };
+
   useEffect(() => {
     loadEmergencies();
     return realtimeEvents.on(REALTIME_EVENTS.medicalChanged, loadEmergencies);
@@ -64,6 +81,24 @@ export const MedicalHelpScreen: React.FC = () => {
           </AppText>
         </Pressable>
       </View>
+
+      {activeEmergency && (
+        <Card style={styles.activeAlert}>
+          <View style={styles.activeAlertHeader}>
+            <View style={styles.flex}>
+              <AppText variant="label" tone="critical">ACTIVE EMERGENCY ALERT</AppText>
+              <AppText variant="heading" style={styles.activeAlertTitle}>
+                {activeEmergency.status === 'ON_THE_WAY' ? 'Help is on the way' : activeEmergency.status === 'ARRIVED' ? 'Help has arrived' : 'Medical team notified'}
+              </AppText>
+              <AppText variant="caption" tone="ink3">
+                {activeEmergency.building?.name || 'Your device location is shared with responders'}
+              </AppText>
+            </View>
+            <StatusBadge label={humanize(activeEmergency.status)} tone={emergencyTone[activeEmergency.status]} />
+          </View>
+          <Button title="I’m safe — cancel alert" variant="secondary" onPress={cancelActiveEmergency} style={styles.cancelAlert} />
+        </Card>
+      )}
 
       <SectionLabel>Services</SectionLabel>
       <ListGroup>
@@ -129,4 +164,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   requestTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   requestMeta: { marginTop: 4 },
+  activeAlert: { borderColor: colors.criticalLine, backgroundColor: colors.criticalSoft },
+  activeAlertHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  activeAlertTitle: { marginTop: 4, marginBottom: 2 },
+  cancelAlert: { marginTop: spacing.lg },
 });
