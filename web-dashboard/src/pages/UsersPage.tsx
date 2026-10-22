@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Search, Users, XCircle } from 'lucide-react';
+import { CheckCircle2, Plus, Search, Users, XCircle } from 'lucide-react';
 import { usersService } from '../services/users.service';
 import { REALTIME_EVENTS } from '../services/socket';
 import { useAuthStore } from '../store/authStore';
 import { Role, User } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input, Select } from '../components/ui/Field';
-import { ConfirmDialog } from '../components/ui/Modal';
+import { ConfirmDialog, Modal } from '../components/ui/Modal';
 import { Table, THead, TBody, TR, TH, TD } from '../components/ui/Table';
 import { Avatar, EmptyState, PageHeader, SkeletonRows } from '../components/ui/Feedback';
 import { toast } from '../components/ui/Toast';
@@ -25,6 +25,8 @@ export const UsersPage: React.FC = () => {
   const [pendingChange, setPendingChange] = useState<{ user: User; role: Role } | null>(null);
   const [pendingStatus, setPendingStatus] = useState<{ user: User; isActive: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', phone: '', role: 'STUDENT' as Role });
 
   const loadUsers = useCallback(
     () =>
@@ -79,12 +81,37 @@ export const UsersPage: React.FC = () => {
     }
   };
 
+  const createUser = async () => {
+    if (!newUser.name.trim() || !newUser.email.trim() || newUser.password.length < 8) {
+      toast.error('Add a name, valid email and a password of at least 8 characters.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await usersService.create({ ...newUser, name: newUser.name.trim(), email: newUser.email.trim(), phone: newUser.phone.trim() || undefined });
+      setUsers(prev => [created, ...prev]);
+      setCreateOpen(false);
+      setNewUser({ name: '', email: '', password: '', phone: '', role: 'STUDENT' });
+      toast.success(`${created.name}’s account was created`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Couldn’t create the account.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
         eyebrow="Administration"
         title="People"
         description="Everyone with a campus account, and what they can access."
+        actions={
+          <Button onClick={() => setCreateOpen(true)} size="md">
+            <Plus className="w-4 h-4" />
+            Add account
+          </Button>
+        }
       />
 
       <Card>
@@ -216,6 +243,31 @@ export const UsersPage: React.FC = () => {
         onConfirm={confirmStatusChange}
         onCancel={() => setPendingStatus(null)}
       />
+
+      <Modal
+        isOpen={createOpen}
+        onClose={() => !saving && setCreateOpen(false)}
+        title="Add a campus account"
+        description="Create staff, faculty or student access without asking them to self-register first."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={createUser} isLoading={saving}>Create account</Button>
+          </>
+        }
+      >
+        <div className="grid gap-4">
+          <Input label="Full name" value={newUser.name} onChange={e => setNewUser(prev => ({ ...prev, name: e.target.value }))} autoFocus />
+          <Input label="Campus email" type="email" value={newUser.email} onChange={e => setNewUser(prev => ({ ...prev, email: e.target.value }))} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Temporary password" type="password" hint="At least 8 characters, including a number." value={newUser.password} onChange={e => setNewUser(prev => ({ ...prev, password: e.target.value }))} />
+            <Input label="Phone (optional)" value={newUser.phone} onChange={e => setNewUser(prev => ({ ...prev, phone: e.target.value }))} />
+          </div>
+          <Select label="Role" value={newUser.role} onChange={e => setNewUser(prev => ({ ...prev, role: e.target.value as Role }))}>
+            {roles.map(role => <option key={role} value={role}>{roleLabel[role]}</option>)}
+          </Select>
+        </div>
+      </Modal>
     </>
   );
 };

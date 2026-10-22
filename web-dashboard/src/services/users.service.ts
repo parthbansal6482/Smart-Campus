@@ -16,4 +16,9 @@ export const usersService = {
     const res = await api.patch<ApiResponse<User>>(`/users/${id}/active`, { isActive });
     return res.data.data;
   },
+
+  create: async (data: { name: string; email: string; password: string; role: Role; phone?: string }): Promise<User> => {
+    const res = await api.post<ApiResponse<User>>('/users', data);
+    return res.data.data;
+  },
 };
