@@ -181,7 +181,7 @@ export class MedicalService {
     return updated;
   }
 
-  // --- EMERGENCY LOCATION TRACKING (basic scaffold) ---
+  // --- EMERGENCY LOCATION TRACKING ---
   async recordLocationPing(emergencyId: string, userId: string, fix: { latitude: number; longitude: number; accuracyM?: number }) {
     const emergency = await prisma.emergency.findUnique({ where: { id: emergencyId } });
     if (!emergency) throw new NotFoundError('Emergency incident not found');
@@ -194,7 +194,15 @@ export class MedicalService {
       throw new TooManyRequestsError('Location updates are limited to one per second');
     }
 
-    const ping = await prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } });
+    const [ping] = await prisma.$transaction([
+      prisma.emergencyLocationPing.create({ data: { emergencyId, ...fix } }),
+      // Keep the incident itself pointed at the latest fix so list views,
+      // notification copy and map links stay useful between trail refreshes.
+      prisma.emergency.update({
+        where: { id: emergencyId },
+        data: { latitude: fix.latitude, longitude: fix.longitude },
+      }),
+    ]);
     await this.pruneLocationTrail(emergencyId);
 
     // Live-update anyone watching this incident (responders, the reporter).
@@ -203,6 +211,7 @@ export class MedicalService {
     } catch {
       // Socket server not running (e.g. in tests) — the ping is still stored.
     }
+    publishChange('emergencies', { users: [emergency.userId], roles: MEDICAL_ROLES }, 'updated', [emergencyId]);
 
     return ping;
   }

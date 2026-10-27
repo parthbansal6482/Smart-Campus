@@ -78,6 +78,30 @@ describe('PATCH /medical-help/emergencies/:id/status — state machine', () => {
   });
 });
 
+describe('POST /medical-help/emergencies/:id/location', () => {
+  it('updates the incident latest fix while retaining the trail ping', async () => {
+    const student = await createStudent();
+    const triggered = await request(app)
+      .post('/api/v1/medical-help/emergencies/trigger')
+      .set('Authorization', authed(student.accessToken))
+      .send({ latitude: 10, longitude: 20, tag: 'OTHER' });
+
+    const emergencyId = triggered.body.data.id;
+    const location = { latitude: 10.001, longitude: 20.002, accuracyM: 8 };
+    const ping = await request(app)
+      .post(`/api/v1/medical-help/emergencies/${emergencyId}/location`)
+      .set('Authorization', authed(student.accessToken))
+      .send(location);
+
+    expect(ping.status).toBe(201);
+    expect(ping.body.data).toMatchObject(location);
+
+    const updated = await prisma.emergency.findUniqueOrThrow({ where: { id: emergencyId } });
+    expect(updated.latitude).toBe(location.latitude);
+    expect(updated.longitude).toBe(location.longitude);
+  });
+});
+
 describe('POST /medical-help/medicine-orders', () => {
   it('decrements stock and rejects ordering more than is in stock', async () => {
     const student = await createStudent();
