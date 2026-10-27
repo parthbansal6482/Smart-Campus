@@ -28,3 +28,8 @@ npm run ios
 
 - **Student:** `student@smartcampus.edu` / `Password@123`
 - **Faculty:** `faculty@smartcampus.edu` / `Password@123`
+## Emergency location tracking
+
+An active SOS uses Expo background location updates so responders continue receiving the reporter’s latest position when the app is backgrounded. The incident id is persisted locally and restored when the app starts again. Users who decline background permission still receive foreground tracking while the app is open.
+
+For a native build, the `expo-location` config plugin enables the iOS background location mode and Android background/foreground-service permissions. Expo Go may fall back to foreground tracking because native background task configuration is build-time dependent.

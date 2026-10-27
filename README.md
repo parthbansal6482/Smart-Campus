@@ -74,13 +74,13 @@ npm start
 
 ## Emergency Location Tracking
 
-Live GPS sharing during an emergency. The web dashboard polls the trail every 10s and shows the latest fix on each active incident.
+Live GPS sharing during an emergency. The web dashboard polls the trail every 10s and shows the latest fix on each active incident. The mobile app continues sharing in the background while an incident is active, including after the SOS screen is closed or the JavaScript runtime is recreated.
 
 - `POST /api/v1/medical-help/emergencies/:id/location` — reporter streams a GPS fix (`latitude`, `longitude`, optional `accuracyM`).
 - `GET /api/v1/medical-help/emergencies/:id/location` — reporter or responder reads the trail.
 - Each ping is also emitted as `emergency:reporter_location_updated` to the `emergency-<id>` socket room.
 - Limits: one ping per second per incident (429 otherwise); the trail is capped at 2000 pings.
-- Mobile: `mobile-app/src/services/emergencyTracking.ts`.
+- Mobile: `mobile-app/src/services/emergencyTracking.ts`. The app requests foreground and background location permission, uses an Expo native location task when available, and falls back to foreground updates when background permission is declined. The active incident id is persisted locally and cleared only when the incident is cancelled or handled.
 - Requires the `emergency_location_pings` migration: `cd backend && npx prisma migrate deploy`.
 
 ## Cafeteria
