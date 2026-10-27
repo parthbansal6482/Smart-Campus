@@ -41,7 +41,6 @@ export const EmergencyScreen: React.FC = () => {
 
   useEffect(() => () => {
     if (timer.current) clearInterval(timer.current);
-    emergencyTracking.stop();
   }, []);
 
   // Responders moving the incident along (or closing it) shows up here as it happens.
@@ -54,7 +53,7 @@ export const EmergencyScreen: React.FC = () => {
           const mine = list.find(e => e.id === emergencyId);
           if (!mine) return;
           setStatus(mine.status);
-          if (mine.status === 'HANDLED' || mine.status === 'CANCELLED') emergencyTracking.stop();
+          if (mine.status === 'HANDLED' || mine.status === 'CANCELLED') void emergencyTracking.stop();
         })
         .catch(() => undefined);
     refresh();
@@ -75,7 +74,10 @@ export const EmergencyScreen: React.FC = () => {
       setLocationLabel(emergency.building?.name || 'Location shared from device');
       setSentAt(new Date());
       setPhase('sent');
-      await emergencyTracking.start(emergency.id);
+      const trackingStarted = await emergencyTracking.start(emergency.id);
+      if (!trackingStarted) {
+        Alert.alert('Alert sent without live tracking', 'Keep location access enabled and call campus security if responders need an immediate update.');
+      }
     } catch {
       setPhase('ready');
       Alert.alert('Couldn’t send alert', 'Please try again or call campus security directly.');
@@ -125,7 +127,7 @@ export const EmergencyScreen: React.FC = () => {
           if (emergencyId) {
             await medicalService.cancelEmergency(emergencyId).catch(() => undefined);
           }
-          emergencyTracking.stop();
+          await emergencyTracking.stop();
           navigation.goBack();
         },
       },

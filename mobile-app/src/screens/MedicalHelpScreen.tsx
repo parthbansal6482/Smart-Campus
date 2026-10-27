@@ -12,6 +12,7 @@ import { Screen, SectionLabel } from '../components/Screen';
 import { StatusBadge } from '../components/StatusBadge';
 import { colors, radius, spacing, Tone } from '../theme';
 import { useCampusStore } from '../store/campusStore';
+import { emergencyTracking } from '../services/emergencyTracking';
 import { Emergency } from '../types';
 import { medicalService } from '../services/medical.service';
 import { realtimeEvents, REALTIME_EVENTS } from '../services/realtimeEvents';
@@ -34,7 +35,15 @@ export const MedicalHelpScreen: React.FC = () => {
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
 
   const loadEmergencies = useCallback(() => {
-    medicalService.getMyEmergencies().then(setEmergencies).catch(() => undefined);
+    medicalService
+      .getMyEmergencies()
+      .then(async list => {
+        setEmergencies(list);
+        const active = list.find(e => !['HANDLED', 'CANCELLED'].includes(e.status));
+        if (active) await emergencyTracking.resume(active.id);
+        else await emergencyTracking.stop();
+      })
+      .catch(() => undefined);
   }, []);
 
   const activeEmergency = emergencies.find(e => !['HANDLED', 'CANCELLED'].includes(e.status));

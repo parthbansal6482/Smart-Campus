@@ -93,15 +93,31 @@ export const emergencyTracking = {
   },
 
   /** Reattaches tracking after app restart or a recreated JS runtime. */
-  resume: async (): Promise<boolean> => {
-    const emergencyId = await AsyncStorage.getItem(ACTIVE_EMERGENCY_KEY);
-    return emergencyId ? emergencyTracking.start(emergencyId) : false;
+  resume: async (knownEmergencyId?: string): Promise<boolean> => {
+    const emergencyId = knownEmergencyId ?? (await AsyncStorage.getItem(ACTIVE_EMERGENCY_KEY));
+    if (knownEmergencyId) await AsyncStorage.setItem(ACTIVE_EMERGENCY_KEY, knownEmergencyId);
+    if (!emergencyId) return false;
+    try {
+      if (await Location.hasStartedLocationUpdatesAsync(EMERGENCY_LOCATION_TASK)) {
+        backgroundRunning = true;
+        return true;
+      }
+    } catch {
+      // The native task API may be unavailable in a simulator or Expo Go.
+    }
+    return emergencyTracking.start(emergencyId);
   },
 
   stop: async () => {
     foregroundSubscription?.remove();
     foregroundSubscription = null;
-    if (backgroundRunning || (await Location.hasStartedLocationUpdatesAsync(EMERGENCY_LOCATION_TASK))) {
+    let nativeTaskRunning = false;
+    try {
+      nativeTaskRunning = await Location.hasStartedLocationUpdatesAsync(EMERGENCY_LOCATION_TASK);
+    } catch {
+      // Nothing to stop when the native location module is unavailable.
+    }
+    if (backgroundRunning || nativeTaskRunning) {
       await Location.stopLocationUpdatesAsync(EMERGENCY_LOCATION_TASK).catch(() => undefined);
     }
     backgroundRunning = false;
