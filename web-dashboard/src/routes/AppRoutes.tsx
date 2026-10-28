@@ -11,6 +11,7 @@ import { CafeteriaPage } from '../pages/CafeteriaPage';
 import { UsersPage } from '../pages/UsersPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { AuditLogPage } from '../pages/AuditLogPage';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -27,6 +28,7 @@ export const AppRoutes: React.FC = () => {
           <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/audit-log" element={<AuditLogPage />} />
           </Route>
 
           {/* Classroom Module */}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutGrid, DoorOpen, HeartPulse, UtensilsCrossed, Users, Settings, LogOut, LucideIcon } from 'lucide-react';
+import { LayoutGrid, DoorOpen, FileClock, HeartPulse, UtensilsCrossed, Users, Settings, LogOut, LucideIcon } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { Role } from '../../types';
 import { cn } from '../../lib/utils';
@@ -35,6 +35,7 @@ const sections: { title?: string; items: NavItem[] }[] = [
     title: 'Administration',
     items: [
       { label: 'People', path: '/users', icon: Users, roles: ['ADMIN'] },
+      { label: 'Audit log', path: '/audit-log', icon: FileClock, roles: ['ADMIN'] },
       {
         label: 'Settings',
         path: '/settings',
