@@ -16,6 +16,16 @@ export interface User {
   createdAt: string;
 }
 
+export interface AuditLog {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+  actor: Pick<User, 'id' | 'name' | 'email' | 'role'>;
+}
+
 export interface Building {
   id: string;
   name: string;
