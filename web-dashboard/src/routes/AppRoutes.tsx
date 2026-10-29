@@ -12,6 +12,8 @@ import { UsersPage } from '../pages/UsersPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { AuditLogPage } from '../pages/AuditLogPage';
+import { ForgotPasswordPage } from '../pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -19,6 +21,8 @@ export const AppRoutes: React.FC = () => {
       {/* Auth Public Routes */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
 
       {/* Protected Dashboard Routes */}

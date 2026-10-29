@@ -25,6 +25,14 @@ export const authService = {
     return res.data.data;
   },
 
+  requestPasswordReset: async (email: string): Promise<void> => {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  resetPassword: async (token: string, password: string): Promise<void> => {
+    await api.post('/auth/reset-password', { token, password });
+  },
+
   /** Best-effort — revokes the refresh token server-side so it can't be replayed after sign-out. */
   logout: async (refreshToken: string | null): Promise<void> => {
     if (!refreshToken) return;

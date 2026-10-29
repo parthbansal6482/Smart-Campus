@@ -72,6 +72,9 @@ export const LoginPage: React.FC = () => {
             </>
           )}
         </Button>
+        <button type="button" onClick={() => navigate('/forgot-password')} className="w-full text-center text-[13px] text-ink-3 hover:text-ink underline underline-offset-2">
+          Forgot your password?
+        </button>
       </form>
 
       <div className="mt-10">
