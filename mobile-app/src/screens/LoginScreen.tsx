@@ -90,6 +90,10 @@ export const LoginScreen: React.FC = () => {
 
         <Button title="Sign in" onPress={handleLogin} isLoading={isLoading} style={styles.submit} />
 
+        <Pressable onPress={() => navigation.navigate('ForgotPassword')} accessibilityRole="link" style={styles.forgot}>
+          <AppText variant="callout" tone="ink3" style={styles.link}>Forgot your password?</AppText>
+        </Pressable>
+
         <View style={styles.demo}>
           <AppText variant="caption" tone="ink3">
             Try a demo account:
@@ -141,6 +145,7 @@ const styles = StyleSheet.create({
   headlineItalic: { fontSize: 44, lineHeight: 50 },
   lede: { marginTop: spacing.md, marginBottom: 40, maxWidth: 320 },
   submit: { marginTop: spacing.sm },
+  forgot: { alignItems: 'center', marginTop: spacing.lg },
   demo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, flexWrap: 'wrap' },
   demoChip: {
     height: 32,

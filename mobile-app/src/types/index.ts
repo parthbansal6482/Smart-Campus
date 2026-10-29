@@ -217,6 +217,7 @@ export type MainTabParamList = {
 export type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
+  ForgotPassword: undefined;
 };
 
 export interface AppNotification {

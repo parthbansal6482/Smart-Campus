@@ -32,6 +32,10 @@ export const authService = {
     return res.data.data;
   },
 
+  requestPasswordReset: async (email: string): Promise<void> => {
+    await api.post('/auth/forgot-password', { email });
+  },
+
   updateProfile: async (data: { name?: string; phone?: string }): Promise<User> => {
     const res = await api.patch<{ success: boolean; data: User }>('/users/me', data);
     return res.data.data;
