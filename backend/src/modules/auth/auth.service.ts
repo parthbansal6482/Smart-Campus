@@ -166,7 +166,7 @@ export class AuthService {
     // the same token can't both succeed and fork the session.
     const revoked = await prisma.refreshToken.updateMany({
       where: { id: record.id, revokedAt: null },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), lastUsedAt: new Date() },
     });
     if (revoked.count === 0) {
       throw new UnauthorizedError('Refresh token is invalid or has expired');
