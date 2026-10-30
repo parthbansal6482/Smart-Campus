@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Bell, CalendarDays, LogOut, Pencil, Pill, Phone, ReceiptText, ShieldCheck } from 'lucide-react-native';
+import { Bell, CalendarDays, KeyRound, LogOut, Pencil, Pill, Phone, ReceiptText, ShieldCheck } from 'lucide-react-native';
 import { useAuthStore } from '../store/authStore';
 import { AppText } from '../components/AppText';
 import { Card } from '../components/Card';
@@ -132,6 +132,17 @@ export const ProfileScreen: React.FC = () => {
           title="Medical centre"
           subtitle={campus.medicalCenterPhone}
           onPress={() => Linking.openURL(`tel:${campus.medicalCenterPhone.replace(/\s/g, '')}`)}
+          last
+        />
+      </ListGroup>
+
+      <SectionLabel>Security</SectionLabel>
+      <ListGroup>
+        <ListItem
+          icon={icon(KeyRound)}
+          title="Signed-in devices"
+          subtitle="Review and sign out other sessions"
+          onPress={() => navigation.navigate('Sessions')}
           last
         />
       </ListGroup>

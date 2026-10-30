@@ -204,6 +204,7 @@ export type RootStackParamList = {
   Bookings: undefined;
   HealthRequests: undefined;
   Notifications: undefined;
+  Sessions: undefined;
 };
 
 export type MainTabParamList = {

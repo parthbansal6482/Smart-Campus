@@ -7,6 +7,15 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+export interface AuthSession {
+  id: string;
+  userAgent?: string;
+  ipAddress?: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+}
+
 export const authService = {
   login: async (email: string, password: string): Promise<AuthTokens> => {
     const res = await api.post<{ success: boolean; data: AuthTokens }>('/auth/login', {
@@ -34,6 +43,19 @@ export const authService = {
 
   requestPasswordReset: async (email: string): Promise<void> => {
     await api.post('/auth/forgot-password', { email });
+  },
+
+  getSessions: async (): Promise<AuthSession[]> => {
+    const res = await api.get<{ success: boolean; data: AuthSession[] }>('/auth/sessions');
+    return res.data.data;
+  },
+
+  revokeSession: async (id: string): Promise<void> => {
+    await api.delete(`/auth/sessions/${id}`);
+  },
+
+  logoutAll: async (): Promise<void> => {
+    await api.post('/auth/logout-all');
   },
 
   updateProfile: async (data: { name?: string; phone?: string }): Promise<User> => {
